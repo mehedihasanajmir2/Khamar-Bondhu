@@ -1,0 +1,6 @@
+{
+  "name": "খামার বন্ধু - পোল্ট্রি ফার্ম ম্যানেজমেন্ট",
+  "description": "পোল্ট্রি খামারীদের জন্য সম্পূর্ণ বাংলা ভাষায় ব্যাচ, খরচ, ওষুধ-টিকা ও বিক্রির লাভ-ক্ষতি হিসাবের ডিজিটাল খাতা।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

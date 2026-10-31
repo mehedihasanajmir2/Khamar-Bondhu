@@ -1,0 +1,158 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "UserProfile",
+      "description": "Information about a registered poultry farmer",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "name": { "type": "string", "maxLength": 128 },
+        "farmName": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "location": { "type": "string", "maxLength": 128 },
+        "capacity": { "type": "number" },
+        "birdType": { "type": "string", "maxLength": 64 },
+        "registrationDate": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["uid", "email", "name", "farmName"]
+    },
+    "batch": {
+      "title": "Batch",
+      "description": "Poultry batch details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "batchNumber": { "type": "string", "maxLength": 64 },
+        "batchName": { "type": "string", "maxLength": 128 },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "birdType": { "type": "string", "maxLength": 64 },
+        "initialChicks": { "type": "number" },
+        "chickPricePerUnit": { "type": "number" },
+        "supplierName": { "type": "string", "maxLength": 128 },
+        "targetWeightGrams": { "type": "number" },
+        "status": { "type": "string", "maxLength": 32 },
+        "notes": { "type": "string", "maxLength": 512 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "completedDate": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id", "userId", "batchNumber", "startDate", "initialChicks", "status"]
+    },
+    "growthRecord": {
+      "title": "GrowthRecord",
+      "description": "Daily or sample growth, weight, and mortality record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "batchId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 32 },
+        "dayAge": { "type": "number" },
+        "avgWeightGrams": { "type": "number" },
+        "dailyMortality": { "type": "number" },
+        "feedIntakeKg": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 512 },
+        "sampleBirdsCount": { "type": "number" },
+        "sampleTotalWeightKg": { "type": "number" },
+        "lotTotalWeightKg": { "type": "number" },
+        "lotTotalWeightMaund": { "type": "number" }
+      },
+      "required": ["id", "batchId", "userId", "date", "dayAge", "avgWeightGrams"]
+    },
+    "medicineScheduleItem": {
+      "title": "MedicineScheduleItem",
+      "description": "Prescription and vaccination entry for a batch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "batchId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "dayAge": { "type": "number" },
+        "endDayAge": { "type": "number" },
+        "durationDays": { "type": "number" },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseDayIndex": { "type": "number" },
+        "totalCourseDays": { "type": "number" },
+        "medicineName": { "type": "string", "maxLength": 128 },
+        "symptoms": { "type": "string", "maxLength": 256 },
+        "timingAndDosage": { "type": "string", "maxLength": 256 },
+        "purpose": { "type": "string", "maxLength": 256 },
+        "dosage": { "type": "string", "maxLength": 256 },
+        "medicineType": { "type": "string", "maxLength": 64 },
+        "timeOfDay": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "maxLength": 32 },
+        "completedAt": { "type": "string", "maxLength": 64 },
+        "notes": { "type": "string", "maxLength": 512 },
+        "isCustom": { "type": "boolean" }
+      },
+      "required": ["id", "batchId", "userId", "dayAge", "medicineName", "status"]
+    },
+    "expenseRecord": {
+      "title": "ExpenseRecord",
+      "description": "Expense, purchase, or due payment voucher",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "batchId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 32 },
+        "category": { "type": "string", "maxLength": 64 },
+        "amount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "dueAmount": { "type": "number" },
+        "repaidAmount": { "type": "number" },
+        "supplierName": { "type": "string", "maxLength": 128 },
+        "note": { "type": "string", "maxLength": 512 },
+        "paymentMethod": { "type": "string", "maxLength": 64 },
+        "linkedExpenseId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "batchId", "userId", "date", "category", "amount"]
+    },
+    "saleRecord": {
+      "title": "SaleRecord",
+      "description": "Live bird sales transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "batchId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "saleDate": { "type": "string", "maxLength": 32 },
+        "birdsSoldCount": { "type": "number" },
+        "totalWeightKg": { "type": "number" },
+        "pricePerKg": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "buyerName": { "type": "string", "maxLength": 128 },
+        "buyerPhone": { "type": "string", "maxLength": 32 },
+        "notes": { "type": "string", "maxLength": 512 }
+      },
+      "required": ["id", "batchId", "userId", "saleDate", "birdsSoldCount", "totalWeightKg", "pricePerKg", "totalAmount"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/userProfile" },
+      "description": "Stores user farmer profiles"
+    },
+    "/users/{userId}/batches/{batchId}": {
+      "schema": { "$ref": "#/entities/batch" },
+      "description": "Batches owned by the farmer"
+    },
+    "/users/{userId}/batches/{batchId}/growth/{growthId}": {
+      "schema": { "$ref": "#/entities/growthRecord" },
+      "description": "Daily sample weight and mortality records for the batch"
+    },
+    "/users/{userId}/batches/{batchId}/medicines/{medicineId}": {
+      "schema": { "$ref": "#/entities/medicineScheduleItem" },
+      "description": "Medicine and vaccine schedule entries for the batch"
+    },
+    "/users/{userId}/batches/{batchId}/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/expenseRecord" },
+      "description": "Expense and due records for the batch"
+    },
+    "/users/{userId}/batches/{batchId}/sales/{saleId}": {
+      "schema": { "$ref": "#/entities/saleRecord" },
+      "description": "Sales records for the batch"
+    }
+  }
+}
