@@ -21,6 +21,7 @@ export interface UserProfile {
   capacity: number;
   birdType?: BirdType;
   registrationDate: string;
+  passwordHash?: string;
 }
 
 export interface Batch {

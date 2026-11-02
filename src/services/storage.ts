@@ -8,7 +8,7 @@ import {
   SaleRecord,
   UserProfile,
 } from '../types';
-import { calculateBatchAgeDays } from '../utils/formatters';
+import { calculateBatchAgeDays, simpleHash } from '../utils/formatters';
 import { generateInitialSchedule } from '../data/medicineTemplates';
 import { doc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
@@ -38,7 +38,8 @@ export const DEMO_PROFILES: UserProfile[] = [
     location: 'কাপাসিয়া, গাজীপুর',
     capacity: 2000,
     birdType: 'ব্রয়লার',
-    registrationDate: '2026-08-15'
+    registrationDate: '2026-08-15',
+    passwordHash: simpleHash('123456')
   },
   {
     uid: 'FRM-BOG-921473',
@@ -49,7 +50,8 @@ export const DEMO_PROFILES: UserProfile[] = [
     location: 'শেরপুর, বগুড়া',
     capacity: 3500,
     birdType: 'সোনালী',
-    registrationDate: '2026-09-01'
+    registrationDate: '2026-09-01',
+    passwordHash: simpleHash('123456')
   }
 ];
 

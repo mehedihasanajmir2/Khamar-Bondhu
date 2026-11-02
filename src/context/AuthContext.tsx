@@ -13,7 +13,7 @@ import {
 } from '../firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { normalizeIdentifier } from '../utils/formatters';
+import { normalizeIdentifier, simpleHash } from '../utils/formatters';
 
 interface AuthContextType {
   currentUser: UserProfile | null;
@@ -173,54 +173,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (identifier: string, password?: string): Promise<boolean> => {
     setIsLoading(true);
-    const { isPhone, cleanInput, authEmail, displayPhone } = normalizeIdentifier(identifier);
+    const { cleanInput, authEmail } = normalizeIdentifier(identifier);
 
-    // Try Firebase Email Auth if password is supplied
-    if (password && password.length >= 6) {
-      try {
-        const fbUser = await firebaseSignInWithEmail(authEmail, password);
-        if (fbUser) {
-          setAuthPromptReason(null);
-          // onAuthStateChanged will handle profile and sync
-          return true;
-        }
-      } catch (fbErr: any) {
-        console.warn('Firebase email auth sign-in error:', fbErr?.message);
-        if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
-          setIsLoading(false);
-          throw new Error('ভুল পাসওয়ার্ড দিয়েছেন। অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।');
-        }
+    if (!password || password.length < 6) {
+      setIsLoading(false);
+      throw new Error('পাসওয়ার্ডটি অন্তত ৬ অক্ষরের হতে হবে।');
+    }
+
+    // 1. Verify if account exists
+    const existingUser = PoultryStorageService.getUserByEmailOrPhone(cleanInput);
+    if (!existingUser) {
+      setIsLoading(false);
+      throw new Error('এই মোবাইল নম্বর বা ইমেইল দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি। অনুগ্রহ করে প্রথমে নতুন একাউন্ট নিবন্ধন করুন।');
+    }
+
+    // 2. Strict password validation against stored passwordHash
+    if (existingUser.passwordHash) {
+      if (existingUser.passwordHash !== simpleHash(password)) {
+        setIsLoading(false);
+        throw new Error('ভুল পাসওয়ার্ড দিয়েছেন! অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।');
+      }
+    }
+
+    // 3. Authenticate with Firebase if configured
+    try {
+      const fbUser = await firebaseSignInWithEmail(authEmail, password);
+      if (fbUser) {
+        setAuthPromptReason(null);
+        return true;
+      }
+    } catch (fbErr: any) {
+      if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
+        setIsLoading(false);
+        throw new Error('ভুল পাসওয়ার্ড দিয়েছেন! অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।');
+      }
+      // If user had no stored passwordHash yet (e.g. legacy demo user), securely bind this password
+      if (!existingUser.passwordHash) {
+        existingUser.passwordHash = simpleHash(password);
+        PoultryStorageService.saveUser(existingUser);
       }
     }
 
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    // Look for existing user by email or mobile phone
-    let user = PoultryStorageService.getUserByEmailOrPhone(cleanInput);
-    if (!user) {
-      // Create with deterministic UID so data is NEVER lost across logins
-      const stableUid = PoultryStorageService.getDeterministicUid(cleanInput);
-      const username = isPhone ? `খামারী (${displayPhone})` : cleanInput.split('@')[0];
-      const newProfile: UserProfile = {
-        uid: stableUid,
-        email: isPhone ? authEmail : cleanInput,
-        name: isPhone ? `খামারী` : `${username} (খামারী)`,
-        farmName: isPhone ? `আমার পোল্ট্রি খামার` : `${username} পোল্ট্রি খামার`,
-        phone: isPhone ? (displayPhone || cleanInput) : '০১৭০০-০০০০০০',
-        location: 'বাংলাদেশ',
-        capacity: 1000,
-        birdType: 'ব্রয়লার',
-        registrationDate: new Date().toISOString().split('T')[0]
-      };
-      PoultryStorageService.saveUser(newProfile);
-      user = newProfile;
-    }
+    // Successful verified login
+    PoultryStorageService.saveUser(existingUser);
+    PoultryStorageService.setActiveUserId(existingUser.uid);
+    await PoultryStorageService.syncUserFromFirestore(existingUser.uid);
 
-    PoultryStorageService.saveUser(user);
-    PoultryStorageService.setActiveUserId(user.uid);
-    await PoultryStorageService.syncUserFromFirestore(user.uid);
-
-    setCurrentUser(user);
+    setCurrentUser(existingUser);
     setSyncVersion((v) => v + 1);
     setAuthPromptReason(null);
     setIsLoading(false);
@@ -234,6 +235,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     const { isPhone, cleanInput, authEmail, displayPhone } = normalizeIdentifier(profileData.email);
 
+    if (!password || password.length < 6) {
+      setIsLoading(false);
+      throw new Error('পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।');
+    }
+
+    // Check if account already exists
+    const existing = PoultryStorageService.getUserByEmailOrPhone(cleanInput);
+    if (existing) {
+      setIsLoading(false);
+      throw new Error('এই মোবাইল নম্বর বা ইমেইল দিয়ে ইতোমধ্যে একাউন্ট খোলা আছে। অনুগ্রহ করে পাসওয়ার্ড দিয়ে লগইন করুন।');
+    }
+
+    const passHash = simpleHash(password);
+
     // Try Firebase Email Registration if password provided
     if (password && password.length >= 6) {
       try {
@@ -244,7 +259,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: isPhone ? authEmail : cleanInput,
             phone: profileData.phone || (isPhone ? displayPhone : '০১৭০০-০০০০০০'),
             uid: fbUser.uid,
-            registrationDate: new Date().toISOString().split('T')[0]
+            registrationDate: new Date().toISOString().split('T')[0],
+            passwordHash: passHash
           };
 
           try {
@@ -263,7 +279,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return true;
         }
       } catch (fbErr: any) {
-        console.warn('Firebase email sign-up error, proceeding with stable registered user:', fbErr?.message);
+        console.warn('Firebase email sign-up error, proceeding with registered user:', fbErr?.message);
         if (fbErr?.code === 'auth/email-already-in-use') {
           setIsLoading(false);
           throw new Error('এই মোবাইল নম্বর বা ইমেইল দিয়ে ইতোমধ্যে একাউন্ট খোলা আছে। অনুগ্রহ করে লগইন করুন।');
@@ -273,16 +289,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    // Check if user already exists
-    const existing = PoultryStorageService.getUserByEmailOrPhone(cleanInput);
-    const uid = existing ? existing.uid : PoultryStorageService.getDeterministicUid(cleanInput);
+    const uid = PoultryStorageService.getDeterministicUid(cleanInput);
 
     const savedProfile: UserProfile = {
       ...profileData,
       uid,
       email: isPhone ? authEmail : cleanInput,
       phone: profileData.phone || (isPhone ? displayPhone : '০১৭০০-০০০০০০'),
-      registrationDate: existing?.registrationDate || new Date().toISOString().split('T')[0]
+      registrationDate: new Date().toISOString().split('T')[0],
+      passwordHash: passHash
     };
 
     PoultryStorageService.saveUser(savedProfile);

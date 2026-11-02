@@ -129,3 +129,16 @@ export function normalizeIdentifier(input: string): {
     displayPhone: phone.length === 11 ? `${phone.substring(0, 5)}-${phone.substring(5)}` : phone
   };
 }
+
+/**
+ * Generates a simple hash string for validating stored passwords safely
+ */
+export function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return 'pw_' + Math.abs(hash).toString(36);
+}
