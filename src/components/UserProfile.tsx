@@ -24,7 +24,12 @@ import {
   Eye,
   PlusCircle,
   ExternalLink,
-  Award
+  Award,
+  Cloud,
+  Download,
+  RefreshCw,
+  Database,
+  CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Batch, BirdType, UserProfile as UserProfileType } from '../types';
@@ -52,6 +57,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const { currentUser, updateProfile, allDemoUsers, switchUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [cloudSyncMsg, setCloudSyncMsg] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState(currentUser?.name || '');
@@ -66,6 +73,40 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBirdType, setFilterBirdType] = useState<string>('all');
   const [selectedArchivedBatch, setSelectedArchivedBatch] = useState<Batch | null>(null);
+
+  const handleManualCloudSync = async () => {
+    if (!currentUser) return;
+    setIsSyncingCloud(true);
+    setCloudSyncMsg(null);
+    try {
+      await PoultryStorageService.pushAllToFirestore(currentUser.uid);
+      await PoultryStorageService.syncUserFromFirestore(currentUser.uid);
+      setCloudSyncMsg('✓ আপনার খামারের সকল তথ্য সফলভাবে গুগল ক্লাউড ফায়ারস্টোরে সিঙ্ক ও সংরক্ষিত হয়েছে!');
+    } catch (e: any) {
+      setCloudSyncMsg('সিঙ্ক করতে সমস্যা হয়েছে। ইন্টারনেট সংযোগ চেক করুন।');
+    } finally {
+      setIsSyncingCloud(false);
+      setTimeout(() => setCloudSyncMsg(null), 5000);
+    }
+  };
+
+  const handleDownloadBackup = () => {
+    if (!currentUser) return;
+    try {
+      const backupJson = PoultryStorageService.exportFullBackup(currentUser.uid);
+      const blob = new Blob([backupJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `khamar-backup-${currentUser.uid}-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Backup download error:', e);
+    }
+  };
 
   if (!currentUser) {
     return <div className="p-8 text-center text-slate-500">অনুগ্রহ করে লগইন করুন।</div>;
@@ -317,6 +358,86 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </div>
           </form>
         )}
+      </div>
+
+      {/* LIFETIME CLOUD DATA SAFETY & BACKUP CARD */}
+      <div className="bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-emerald-500/30 relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl"></div>
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-5 border-b border-white/10">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
+              <Cloud className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg sm:text-xl font-black text-white">
+                  আজীবন ক্লাউড ব্যাকআপ গ্যারান্টি (Lifetime Data Safe)
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  ক্লাউডে স্থায়ীভাবে সংরক্ষিত
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed max-w-2xl">
+                আপনার খামারের সকল ব্যাচ, ওজনের রেকর্ড, ওষুধের রুটিন, খরচ, বকেয়া এবং বিক্রির হিসাব গুগল ক্লাউড ফায়ারস্টোর (Google Cloud Firestore SSD) সার্ভারে আজীবনের জন্য সুরক্ষিত। ফোন হারালে, ব্রাউজার ক্যাশ ক্লিয়ার করলে বা লগআউট করলেও একই একাউন্টে লগইন করলেই ১০০% ডাটা স্বয়ংক্রিয়ভাবে ফিরে আসবে।
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              onClick={handleManualCloudSync}
+              disabled={isSyncingCloud}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+              title="গুগল ক্লাউডে ডাটা সিঙ্ক করুন"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+              <span>{isSyncingCloud ? 'সিঙ্ক হচ্ছে...' : 'এখনই সিঙ্ক করুন'}</span>
+            </button>
+            <button
+              onClick={handleDownloadBackup}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+              title="আপনার কম্পিউটার বা ফোনে সম্পূর্ণ ব্যাকআপ ফাইল ডাউনলোড করুন"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              <span>ফাইল ব্যাকআপ</span>
+            </button>
+          </div>
+        </div>
+
+        {cloudSyncMsg && (
+          <div className="mt-4 p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 rounded-xl text-xs font-semibold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{cloudSyncMsg}</span>
+          </div>
+        )}
+
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center gap-2.5">
+            <Database className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">ক্লাউড ডাটাবেজ</span>
+              <span className="font-mono text-[11px] text-emerald-300 truncate font-semibold block">Google Cloud Firestore</span>
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center gap-2.5">
+            <ShieldCheck className="w-4 h-4 text-teal-400 shrink-0" />
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">স্থায়ী ডাটা সুরক্ষা</span>
+              <span className="text-[11px] text-teal-300 font-semibold block">SSD Multi-Region Replication</span>
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center gap-2.5">
+            <UserCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+            <div>
+              <span className="text-[10px] text-slate-400 block font-medium">আপনার ইউজার আইডি</span>
+              <span className="font-mono text-[11px] text-cyan-300 font-semibold block truncate">
+                {currentUser.uid}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* CORE REQUIRED SECTION: Previous Batches History (আগের ব্যাচসমূহ) */}

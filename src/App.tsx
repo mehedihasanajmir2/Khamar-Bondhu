@@ -31,12 +31,15 @@ import {
   UserCheck,
   ShieldAlert
 } from 'lucide-react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { auth, db } from './firebase';
 
 const MainApp: React.FC = () => {
   const {
     currentUser,
     isLoading,
     isGuest,
+    syncVersion,
     isAuthModalOpen,
     setIsAuthModalOpen,
     openAuthModalWithReason
@@ -105,16 +108,50 @@ const MainApp: React.FC = () => {
       setBatches(userBatches);
 
       if (userBatches.length > 0) {
-        // Select first active batch or first batch
-        const active = userBatches.find((b) => b.status === 'active') || userBatches[0];
-        setActiveBatchId(active.id);
+        setActiveBatchId((prev) => {
+          if (prev && userBatches.some((b) => b.id === prev)) return prev;
+          const active = userBatches.find((b) => b.status === 'active') || userBatches[0];
+          return active.id;
+        });
       } else {
         setActiveBatchId(null);
       }
     } catch (err: any) {
       console.error('RLS Isolation check:', err);
     }
-  }, [currentUser]);
+  }, [currentUser, syncVersion]);
+
+  // Real-time Firestore sync listener for authenticated user
+  useEffect(() => {
+    if (!currentUser || isGuest) return;
+
+    if (auth.currentUser && auth.currentUser.uid === currentUser.uid) {
+      const batchesCollRef = collection(db, 'users', currentUser.uid, 'batches');
+      const unsubscribe = onSnapshot(
+        batchesCollRef,
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remoteBatches: Batch[] = [];
+            snapshot.forEach((docSnap) => {
+              remoteBatches.push(docSnap.data() as Batch);
+            });
+            const key = PoultryStorageService.getKey('poultry_batches', currentUser.uid);
+            localStorage.setItem(key, JSON.stringify(remoteBatches));
+            setBatches(remoteBatches);
+            setActiveBatchId((prev) => {
+              if (prev && remoteBatches.some((b) => b.id === prev)) return prev;
+              const active = remoteBatches.find((b) => b.status === 'active') || remoteBatches[0];
+              return active.id;
+            });
+          }
+        },
+        (error) => {
+          console.warn('Real-time batches snapshot listener error:', error);
+        }
+      );
+      return () => unsubscribe();
+    }
+  }, [currentUser, isGuest]);
 
   // Load records for active batch
   useEffect(() => {

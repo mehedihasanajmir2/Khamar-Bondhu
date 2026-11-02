@@ -88,3 +88,44 @@ export function formatMaund(kg: number): string {
   const maund = (kg / 40).toFixed(1);
   return `${toBnNumber(maund)} মণ`;
 }
+
+/**
+ * Normalizes input: handles Bengali/English digits,
+ * identifies if it is an email or mobile phone, and prepares standard format.
+ */
+export function normalizeIdentifier(input: string): {
+  isPhone: boolean;
+  cleanInput: string;
+  authEmail: string;
+  displayPhone: string;
+} {
+  const trimmed = input.trim();
+  const bnToEnMap: Record<string, string> = {
+    '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+    '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+  };
+  const converted = trimmed.replace(/[০-৯]/g, (ch) => bnToEnMap[ch] || ch);
+
+  if (converted.includes('@')) {
+    const cleanEmail = converted.toLowerCase();
+    return {
+      isPhone: false,
+      cleanInput: cleanEmail,
+      authEmail: cleanEmail,
+      displayPhone: ''
+    };
+  }
+
+  // Treat as mobile phone number
+  const digitsOnly = converted.replace(/[^0-9]/g, '');
+  let phone = digitsOnly;
+  if (digitsOnly.startsWith('880')) {
+    phone = digitsOnly.substring(2);
+  }
+  return {
+    isPhone: true,
+    cleanInput: phone,
+    authEmail: `${phone}@khamar.app`,
+    displayPhone: phone.length === 11 ? `${phone.substring(0, 5)}-${phone.substring(5)}` : phone
+  };
+}

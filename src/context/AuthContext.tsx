@@ -13,6 +13,7 @@ import {
 } from '../firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { normalizeIdentifier } from '../utils/formatters';
 
 interface AuthContextType {
   currentUser: UserProfile | null;
@@ -20,6 +21,8 @@ interface AuthContextType {
   isFirebaseConnected: boolean;
   isLoading: boolean;
   isGuest: boolean;
+  syncVersion: number;
+  notifyDataChanged: () => void;
   authPromptReason: string | null;
   setAuthPromptReason: (msg: string | null) => void;
   isAuthModalOpen: boolean;
@@ -42,8 +45,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [syncVersion, setSyncVersion] = useState<number>(0);
   const [authPromptReason, setAuthPromptReason] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+
+  const notifyDataChanged = () => {
+    setSyncVersion((v) => v + 1);
+  };
 
   // Check if UID belongs to demo profiles
   const isDemoUid = (uid?: string | null): boolean => {
@@ -68,20 +76,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setFirebaseUser(fbUser);
         setIsFirebaseConnected(true);
 
-        // Fetch or create profile in Firestore
         try {
           const userDocRef = doc(db, 'users', fbUser.uid);
           const snap = await getDoc(userDocRef);
+          let profile: UserProfile;
 
           if (snap.exists()) {
-            const data = snap.data() as UserProfile;
-            setCurrentUser(data);
-            PoultryStorageService.saveUser(data);
-            PoultryStorageService.setActiveUserId(data.uid);
+            profile = snap.data() as UserProfile;
           } else {
-            // New user profile created from Firebase Auth
             const displayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'খামারী';
-            const newProfile: UserProfile = {
+            profile = {
               uid: fbUser.uid,
               email: fbUser.email || '',
               name: displayName,
@@ -92,15 +96,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               birdType: 'ব্রয়লার',
               registrationDate: new Date().toISOString().split('T')[0]
             };
-
-            await setDoc(userDocRef, newProfile);
-            setCurrentUser(newProfile);
-            PoultryStorageService.saveUser(newProfile);
-            PoultryStorageService.setActiveUserId(newProfile.uid);
+            await setDoc(userDocRef, profile);
           }
 
-          // Sync batches, records, medicines, expenses, and sales from Cloud Firestore
-          await PoultryStorageService.syncUserFromFirestore(fbUser.uid);
+          PoultryStorageService.saveUser(profile);
+          PoultryStorageService.setActiveUserId(profile.uid);
+
+          // CRITICAL: Pull all previous batches and data from Cloud Firestore BEFORE setting state!
+          await PoultryStorageService.syncUserFromFirestore(profile.uid);
+
+          setCurrentUser(profile);
+          setSyncVersion((v) => v + 1);
         } catch (err) {
           console.warn('Firestore profile sync error:', err);
           const localProfile: UserProfile = {
@@ -114,18 +120,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             birdType: 'ব্রয়লার',
             registrationDate: new Date().toISOString().split('T')[0]
           };
-          setCurrentUser(localProfile);
           PoultryStorageService.saveUser(localProfile);
           PoultryStorageService.setActiveUserId(fbUser.uid);
+          await PoultryStorageService.syncUserFromFirestore(fbUser.uid);
+          setCurrentUser(localProfile);
+          setSyncVersion((v) => v + 1);
         }
       } else {
         setFirebaseUser(null);
         // Fallback to active local session or default demo profile (Hasan)
         const activeUid = PoultryStorageService.getActiveUserId();
-        if (activeUid) {
+        if (activeUid && !isDemoUid(activeUid)) {
           const user = PoultryStorageService.getUserById(activeUid);
           if (user) {
+            await PoultryStorageService.syncUserFromFirestore(user.uid);
             setCurrentUser(user);
+            setSyncVersion((v) => v + 1);
           } else {
             const defaultDemo = DEMO_PROFILES[0];
             setCurrentUser(defaultDemo);
@@ -161,36 +171,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string, password?: string): Promise<boolean> => {
+  const login = async (identifier: string, password?: string): Promise<boolean> => {
     setIsLoading(true);
-    const cleanEmail = email.trim().toLowerCase();
+    const { isPhone, cleanInput, authEmail, displayPhone } = normalizeIdentifier(identifier);
 
     // Try Firebase Email Auth if password is supplied
     if (password && password.length >= 6) {
       try {
-        const fbUser = await firebaseSignInWithEmail(cleanEmail, password);
+        const fbUser = await firebaseSignInWithEmail(authEmail, password);
         if (fbUser) {
           setAuthPromptReason(null);
-          setIsLoading(false);
+          // onAuthStateChanged will handle profile and sync
           return true;
         }
       } catch (fbErr: any) {
         console.warn('Firebase email auth sign-in error:', fbErr?.message);
-        // If user not found and password provided, bubble error or fallback to local
+        if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
+          setIsLoading(false);
+          throw new Error('ভুল পাসওয়ার্ড দিয়েছেন। অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।');
+        }
       }
     }
 
     await new Promise((resolve) => setTimeout(resolve, 200));
-    let user = PoultryStorageService.getUserByEmail(cleanEmail);
+
+    // Look for existing user by email or mobile phone
+    let user = PoultryStorageService.getUserByEmailOrPhone(cleanInput);
     if (!user) {
-      const randomCode = Math.floor(100000 + Math.random() * 900000);
-      const username = cleanEmail.split('@')[0];
+      // Create with deterministic UID so data is NEVER lost across logins
+      const stableUid = PoultryStorageService.getDeterministicUid(cleanInput);
+      const username = isPhone ? `খামারী (${displayPhone})` : cleanInput.split('@')[0];
       const newProfile: UserProfile = {
-        uid: `FRM-REG-${randomCode}`,
-        email: cleanEmail,
-        name: `${username} (খামারী)`,
-        farmName: `${username} পোল্ট্রি খামার`,
-        phone: '০১৭০০-০০০০০০',
+        uid: stableUid,
+        email: isPhone ? authEmail : cleanInput,
+        name: isPhone ? `খামারী` : `${username} (খামারী)`,
+        farmName: isPhone ? `আমার পোল্ট্রি খামার` : `${username} পোল্ট্রি খামার`,
+        phone: isPhone ? (displayPhone || cleanInput) : '০১৭০০-০০০০০০',
         location: 'বাংলাদেশ',
         capacity: 1000,
         birdType: 'ব্রয়লার',
@@ -200,8 +216,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user = newProfile;
     }
 
-    setCurrentUser(user);
+    PoultryStorageService.saveUser(user);
     PoultryStorageService.setActiveUserId(user.uid);
+    await PoultryStorageService.syncUserFromFirestore(user.uid);
+
+    setCurrentUser(user);
+    setSyncVersion((v) => v + 1);
     setAuthPromptReason(null);
     setIsLoading(false);
     return true;
@@ -212,16 +232,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password?: string
   ): Promise<boolean> => {
     setIsLoading(true);
-    const cleanEmail = profileData.email.trim().toLowerCase();
+    const { isPhone, cleanInput, authEmail, displayPhone } = normalizeIdentifier(profileData.email);
 
     // Try Firebase Email Registration if password provided
     if (password && password.length >= 6) {
       try {
-        const fbUser = await firebaseSignUpWithEmail(cleanEmail, password);
+        const fbUser = await firebaseSignUpWithEmail(authEmail, password);
         if (fbUser) {
           const newProfile: UserProfile = {
             ...profileData,
-            email: cleanEmail,
+            email: isPhone ? authEmail : cleanInput,
+            phone: profileData.phone || (isPhone ? displayPhone : '০১৭০০-০০০০০০'),
             uid: fbUser.uid,
             registrationDate: new Date().toISOString().split('T')[0]
           };
@@ -232,41 +253,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('Firestore setDoc failed:', e);
           }
 
-          setCurrentUser(newProfile);
           PoultryStorageService.saveUser(newProfile);
           PoultryStorageService.setActiveUserId(newProfile.uid);
+          await PoultryStorageService.syncUserFromFirestore(newProfile.uid);
+          setCurrentUser(newProfile);
+          setSyncVersion((v) => v + 1);
           setAuthPromptReason(null);
           setIsLoading(false);
           return true;
         }
       } catch (fbErr: any) {
-        console.warn('Firebase email sign-up error, proceeding with local registered user:', fbErr?.message);
+        console.warn('Firebase email sign-up error, proceeding with stable registered user:', fbErr?.message);
+        if (fbErr?.code === 'auth/email-already-in-use') {
+          setIsLoading(false);
+          throw new Error('এই মোবাইল নম্বর বা ইমেইল দিয়ে ইতোমধ্যে একাউন্ট খোলা আছে। অনুগ্রহ করে লগইন করুন।');
+        }
       }
     }
 
     await new Promise((resolve) => setTimeout(resolve, 200));
-    const randomCode = Math.floor(100000 + Math.random() * 900000);
-    const newUid = `FRM-REG-${randomCode}`;
 
-    const newProfile: UserProfile = {
+    // Check if user already exists
+    const existing = PoultryStorageService.getUserByEmailOrPhone(cleanInput);
+    const uid = existing ? existing.uid : PoultryStorageService.getDeterministicUid(cleanInput);
+
+    const savedProfile: UserProfile = {
       ...profileData,
-      uid: newUid,
-      email: cleanEmail,
-      registrationDate: new Date().toISOString().split('T')[0]
+      uid,
+      email: isPhone ? authEmail : cleanInput,
+      phone: profileData.phone || (isPhone ? displayPhone : '০১৭০০-০০০০০০'),
+      registrationDate: existing?.registrationDate || new Date().toISOString().split('T')[0]
     };
 
-    PoultryStorageService.saveUser(newProfile);
-    setCurrentUser(newProfile);
-    PoultryStorageService.setActiveUserId(newUid);
+    PoultryStorageService.saveUser(savedProfile);
+    PoultryStorageService.setActiveUserId(uid);
 
     if (auth.currentUser) {
       try {
-        await setDoc(doc(db, 'users', auth.currentUser.uid), newProfile);
+        await setDoc(doc(db, 'users', auth.currentUser.uid), savedProfile);
       } catch (err) {
         console.warn('Firestore setDoc failed:', err);
       }
     }
 
+    await PoultryStorageService.syncUserFromFirestore(uid);
+    setCurrentUser(savedProfile);
+    setSyncVersion((v) => v + 1);
     setAuthPromptReason(null);
     setIsLoading(false);
     return true;
@@ -326,6 +358,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isFirebaseConnected,
         isLoading,
         isGuest,
+        syncVersion,
+        notifyDataChanged,
         authPromptReason,
         setAuthPromptReason,
         isAuthModalOpen,

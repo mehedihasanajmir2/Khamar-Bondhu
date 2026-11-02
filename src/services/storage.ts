@@ -53,9 +53,23 @@ export const DEMO_PROFILES: UserProfile[] = [
   }
 ];
 
+// Helper to strip undefined values so Firestore never errors on undefined
+export function cleanForFirestore<T>(data: T): any {
+  if (data === null || data === undefined) return null;
+  return JSON.parse(
+    JSON.stringify(data, (key, value) => (value === undefined ? null : value))
+  );
+}
+
 export class PoultryStorageService {
-  private static getKey(prefix: string, userId: string): string {
+  static getKey(prefix: string, userId: string): string {
     return `${prefix}_${userId}`;
+  }
+
+  // Stable, deterministic user ID derived from email
+  static getDeterministicUid(email: string): string {
+    const clean = email.trim().toLowerCase();
+    return 'usr_' + clean.replace(/[^a-zA-Z0-9]/g, '_');
   }
 
   // --- Background Cloud Firestore Sync Helpers ---
@@ -66,7 +80,8 @@ export class PoultryStorageService {
         const pathUserId = segments[1];
         if (auth.currentUser.uid === pathUserId) {
           const docRef = doc(db, path);
-          await setDoc(docRef, data, { merge: true });
+          const sanitized = cleanForFirestore(data);
+          await setDoc(docRef, sanitized, { merge: true });
         }
       }
     } catch (error) {
@@ -91,28 +106,38 @@ export class PoultryStorageService {
 
   /**
    * Pulls all batches and child collections from Cloud Firestore into local storage
-   * for the signed-in Firebase user
+   * and merges two-way with local storage so no data is ever lost.
    */
   static async syncUserFromFirestore(userId: string): Promise<boolean> {
-    if (!auth.currentUser || auth.currentUser.uid !== userId) {
+    if (!userId) return false;
+    if (auth.currentUser && auth.currentUser.uid !== userId) {
       return false;
     }
     try {
       const batchesRef = collection(db, 'users', userId, 'batches');
       const batchSnaps = await getDocs(batchesRef);
+      const localBatches = this.getBatches(userId);
+
       if (batchSnaps.empty) {
-        // If Firestore is empty, sync any local batches to Cloud Firestore
-        const localBatches = this.getBatches(userId);
+        // If Firestore is empty, sync any local batches and subcollections to Cloud Firestore
         for (const b of localBatches) {
           await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}`, b);
+          const g = this.getGrowthRecords(userId, b.id);
+          for (const rec of g) await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/growth/${rec.id}`, rec);
+          const m = this.getMedicineSchedule(userId, b.id);
+          for (const med of m) await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/medicines/${med.id}`, med);
+          const exp = this.getExpenses(userId, b.id);
+          for (const e of exp) await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/expenses/${e.id}`, e);
+          const s = this.getSales(userId, b.id);
+          for (const sale of s) await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/sales/${sale.id}`, sale);
         }
         return true;
       }
 
-      const batches: Batch[] = [];
+      const remoteBatches: Batch[] = [];
       for (const batchDoc of batchSnaps.docs) {
         const batchData = batchDoc.data() as Batch;
-        batches.push(batchData);
+        remoteBatches.push(batchData);
         const batchId = batchData.id;
 
         // Sync growth
@@ -164,14 +189,83 @@ export class PoultryStorageService {
         }
       }
 
-      if (batches.length > 0) {
-        localStorage.setItem(this.getKey('poultry_batches', userId), JSON.stringify(batches));
+      // Merge remote and local batches without dropping anything
+      const mergedMap = new Map<string, Batch>();
+      remoteBatches.forEach((b) => mergedMap.set(b.id, b));
+      localBatches.forEach((b) => {
+        if (!mergedMap.has(b.id)) {
+          mergedMap.set(b.id, b);
+          // Upload local batch that wasn't in cloud
+          this.syncFirestoreDoc(`users/${userId}/batches/${b.id}`, b);
+        }
+      });
+
+      const mergedList = Array.from(mergedMap.values());
+      if (mergedList.length > 0) {
+        localStorage.setItem(this.getKey('poultry_batches', userId), JSON.stringify(mergedList));
       }
       return true;
     } catch (err) {
       console.warn('Failed to sync from Firestore:', err);
       return false;
     }
+  }
+
+  /**
+   * Pushes all local batches and subcollections to Cloud Firestore
+   */
+  static async pushAllToFirestore(userId: string): Promise<boolean> {
+    if (!userId || !auth.currentUser || auth.currentUser.uid !== userId) return false;
+    try {
+      const batches = this.getBatches(userId);
+      for (const b of batches) {
+        await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}`, b);
+        const growth = this.getGrowthRecords(userId, b.id);
+        for (const g of growth) {
+          await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/growth/${g.id}`, g);
+        }
+        const meds = this.getMedicineSchedule(userId, b.id);
+        for (const m of meds) {
+          await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/medicines/${m.id}`, m);
+        }
+        const exp = this.getExpenses(userId, b.id);
+        for (const e of exp) {
+          await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/expenses/${e.id}`, e);
+        }
+        const sales = this.getSales(userId, b.id);
+        for (const s of sales) {
+          await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/sales/${s.id}`, s);
+        }
+      }
+      return true;
+    } catch (e) {
+      console.error('Push all to Firestore error:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Exports full farmer data as JSON string for lifetime offline backup
+   */
+  static exportFullBackup(userId: string): string {
+    const user = this.getUserById(userId);
+    const batches = this.getBatches(userId);
+    const data: Record<string, any> = {
+      version: '2.0',
+      exportDate: new Date().toISOString(),
+      user,
+      batches,
+      records: {}
+    };
+    for (const b of batches) {
+      data.records[b.id] = {
+        growth: this.getGrowthRecords(userId, b.id),
+        medicines: this.getMedicineSchedule(userId, b.id),
+        expenses: this.getExpenses(userId, b.id),
+        sales: this.getSales(userId, b.id),
+      };
+    }
+    return JSON.stringify(data, null, 2);
   }
 
   // --- User Profiles & Auth ---
@@ -197,6 +291,26 @@ export class PoultryStorageService {
   static getUserByEmail(email: string): UserProfile | null {
     const users = this.getUsers();
     return users.find((u) => u.email.toLowerCase() === email.toLowerCase()) || null;
+  }
+
+  static getUserByEmailOrPhone(identifier: string): UserProfile | null {
+    const users = this.getUsers();
+    const clean = identifier.trim().toLowerCase();
+    const digitsOnly = clean.replace(/[^0-9]/g, '');
+    return (
+      users.find((u) => {
+        if (u.email.toLowerCase() === clean) return true;
+        if (u.phone) {
+          const userPhoneDigits = u.phone.replace(/[^0-9]/g, '');
+          if (digitsOnly && digitsOnly.length >= 6 && userPhoneDigits.endsWith(digitsOnly)) return true;
+        }
+        if (u.email.includes('@')) {
+          const userEmailDigits = u.email.split('@')[0].replace(/[^0-9]/g, '');
+          if (digitsOnly && digitsOnly.length >= 6 && userEmailDigits === digitsOnly) return true;
+        }
+        return false;
+      }) || null
+    );
   }
 
   static saveUser(user: UserProfile): void {
@@ -695,6 +809,11 @@ export class PoultryStorageService {
     expenses.unshift(repaymentVoucher);
     const key = this.getKey(`expenses_${batchId}`, userId);
     localStorage.setItem(key, JSON.stringify(expenses));
+
+    // Cloud Firestore Sync for both updated parent expense and repayment voucher
+    this.syncFirestoreDoc(`users/${userId}/batches/${batchId}/expenses/${exp.id}`, exp);
+    this.syncFirestoreDoc(`users/${userId}/batches/${batchId}/expenses/${repaymentVoucher.id}`, repaymentVoucher);
+
     return exp;
   }
 
