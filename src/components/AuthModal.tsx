@@ -9,7 +9,7 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const { login, register, loginWithGoogle } = useAuth();
+  const { login, register, loginWithGoogle, authPromptReason, setAuthPromptReason } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,12 +26,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  const handleClose = () => {
+    setAuthPromptReason(null);
+    onClose();
+  };
+
   const handleGoogleLogin = async () => {
     setError('');
     setLoading(true);
     try {
       await loginWithGoogle();
-      onClose();
+      handleClose();
     } catch (err: any) {
       setError(err?.message || 'গুগল লগইন সম্পন্ন করা যায়নি।');
     } finally {
@@ -66,7 +71,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       } else {
         await login(email, password);
       }
-      onClose();
+      handleClose();
     } catch (err: any) {
       setError(err?.message || 'লগইন বা নিবন্ধনে সমস্যা হয়েছে।');
     } finally {
@@ -78,7 +83,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative">
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 text-lg font-bold"
         >
           ✕
@@ -95,6 +100,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             ফায়ারবেস কনসোল অথেনটিকেশন ও ক্লাউড ফায়ারস্টোর সংযুক্ত
           </p>
         </div>
+
+        {/* Informative Prompt Reason Banner when gated */}
+        {authPromptReason && (
+          <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs flex items-start gap-2.5 shadow-xs">
+            <span className="text-base select-none">🔒</span>
+            <div>
+              <p className="font-bold text-amber-900">একাউন্ট তৈরি প্রয়োজন</p>
+              <p className="text-amber-700 mt-0.5 leading-relaxed">{authPromptReason}</p>
+              <div className="mt-2 pt-2 border-t border-amber-200/60 text-[11px] text-emerald-800 font-semibold flex items-center gap-1.5">
+                <span>✓</span>
+                <span>নতুন একাউন্ট খুললে আপনার খামারের ড্যাশবোর্ড সম্পূর্ণ ব্ল্যাঙ্ক (Blank) থাকবে।</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold">

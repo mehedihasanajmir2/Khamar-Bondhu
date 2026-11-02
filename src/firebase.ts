@@ -5,6 +5,8 @@ import {
   signInWithPopup,
   signOut,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   User as FirebaseUser
 } from 'firebase/auth';
 import {
@@ -12,7 +14,18 @@ import {
   doc,
   getDocFromServer
 } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import rawFirebaseConfig from '../firebase-applet-config.json';
+
+// Support both Vercel/Vite environment variables and default applet config
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || rawFirebaseConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || rawFirebaseConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || rawFirebaseConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || rawFirebaseConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || rawFirebaseConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || rawFirebaseConfig.appId,
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || rawFirebaseConfig.firestoreDatabaseId,
+};
 
 // Initialize Firebase App
 export const app = initializeApp(firebaseConfig);
@@ -97,6 +110,28 @@ export async function signInWithGoogle(): Promise<FirebaseUser | null> {
     return result.user;
   } catch (err) {
     console.error('Google Sign-In Error:', err);
+    throw err;
+  }
+}
+
+// Email/Password Sign-In
+export async function signInWithEmail(email: string, pass: string): Promise<FirebaseUser | null> {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, pass);
+    return result.user;
+  } catch (err) {
+    console.error('Email Sign-In Error:', err);
+    throw err;
+  }
+}
+
+// Email/Password Sign-Up
+export async function signUpWithEmail(email: string, pass: string): Promise<FirebaseUser | null> {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, pass);
+    return result.user;
+  } catch (err) {
+    console.error('Email Sign-Up Error:', err);
     throw err;
   }
 }

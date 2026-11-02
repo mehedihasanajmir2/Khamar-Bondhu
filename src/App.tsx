@@ -33,14 +33,42 @@ import {
 } from 'lucide-react';
 
 const MainApp: React.FC = () => {
-  const { currentUser, isLoading } = useAuth();
+  const {
+    currentUser,
+    isLoading,
+    isGuest,
+    isAuthModalOpen,
+    setIsAuthModalOpen,
+    openAuthModalWithReason
+  } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
   // Modals
   const [isNewBatchOpen, setIsNewBatchOpen] = useState(false);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [batchToArchiveId, setBatchToArchiveId] = useState<string | null>(null);
+
+  // Auth Gate Guard: if in demo/guest mode, intercept action and trigger AuthModal
+  const requireAuth = (
+    reason: string = 'আপনার নিজস্ব খামারের তথ্য সংরক্ষণ করতে অনুগ্রহ করে একাউন্ট তৈরি করুন বা লগইন করুন।'
+  ): boolean => {
+    if (isGuest) {
+      openAuthModalWithReason(reason);
+      return false;
+    }
+    return true;
+  };
+
+  const handleOpenNewBatchModal = () => {
+    if (
+      !requireAuth(
+        'নতুন ব্যাচ তৈরি ও নিজস্ব খামারের হিসাব রাখতে দয়া করে একাউন্ট তৈরি করুন বা লগইন করুন। নতুন একাউন্ট খুললে আপনার খামারের ড্যাশবোর্ড সম্পূর্ণ ব্ল্যাঙ্ক (Blank) থাকবে।'
+      )
+    ) {
+      return;
+    }
+    setIsNewBatchOpen(true);
+  };
 
   // Scoped Data State
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -128,6 +156,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleCreateBatch = (batchData: Omit<Batch, 'id' | 'userId' | 'createdAt'>) => {
+    if (!requireAuth('নতুন ব্যাচ তৈরি ও নিজস্ব খামারের হিসাব রাখতে দয়া করে একাউন্ট তৈরি করুন বা লগইন করুন।')) return;
     if (!currentUser) return;
     const newId = `batch_${Date.now()}`;
     const newBatch: Batch = {
@@ -161,6 +190,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleToggleBatchStatus = (batchId: string, currentStatus: 'active' | 'completed') => {
+    if (!requireAuth('ব্যাচের স্ট্যাটাস পরিবর্তন করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser) return;
     const batch = batches.find((b) => b.id === batchId);
     if (!batch) return;
@@ -179,11 +209,13 @@ const MainApp: React.FC = () => {
   };
 
   const handleRequestArchive = (batchId: string) => {
+    if (!requireAuth('ব্যাচ আর্কাইভ করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     setBatchToArchiveId(batchId);
     setIsArchiveModalOpen(true);
   };
 
   const handleConfirmArchive = (batchId: string) => {
+    if (!requireAuth()) return;
     if (!currentUser) return;
     PoultryStorageService.archiveBatch(currentUser.uid, batchId);
     const updated = PoultryStorageService.getBatches(currentUser.uid);
@@ -199,6 +231,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleRestoreBatch = (batchId: string) => {
+    if (!requireAuth()) return;
     if (!currentUser) return;
     PoultryStorageService.restoreBatch(currentUser.uid, batchId);
     const updated = PoultryStorageService.getBatches(currentUser.uid);
@@ -208,6 +241,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleDeleteBatch = (batchId: string) => {
+    if (!requireAuth('ব্যাচ মুছে ফেলতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser) return;
     if (confirm('আপনি কি নিশ্চিত এই সম্পূর্ণ ব্যাচ ও এর সমস্ত হিসাব মুছে ফেলতে চান?')) {
       PoultryStorageService.deleteBatch(currentUser.uid, batchId);
@@ -220,6 +254,7 @@ const MainApp: React.FC = () => {
 
   // Growth Records
   const handleAddGrowthRecord = (rec: Omit<GrowthRecord, 'id' | 'batchId' | 'userId'>) => {
+    if (!requireAuth('দৈনিক ওজন ও বৃদ্ধির হিসাব যোগ করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser || !activeBatchId) return;
     const record: GrowthRecord = {
       ...rec,
@@ -236,6 +271,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleDeleteGrowthRecord = (recId: string) => {
+    if (!requireAuth()) return;
     if (!currentUser || !activeBatchId) return;
     PoultryStorageService.deleteGrowthRecord(currentUser.uid, activeBatchId, recId);
     setGrowthRecords(PoultryStorageService.getGrowthRecords(currentUser.uid, activeBatchId));
@@ -247,6 +283,7 @@ const MainApp: React.FC = () => {
 
   // Medicine Schedule
   const handleToggleMedicine = (itemId: string) => {
+    if (!requireAuth('ওষুধ ও টিকার স্ট্যাটাস পরিবর্তন করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser || !activeBatchId) return;
     const updated = PoultryStorageService.toggleMedicineStatus(currentUser.uid, activeBatchId, itemId);
     setMedicines(updated);
@@ -258,6 +295,7 @@ const MainApp: React.FC = () => {
       | Omit<MedicineScheduleItem, 'id' | 'batchId' | 'userId'>
       | Array<Omit<MedicineScheduleItem, 'id' | 'batchId' | 'userId'>>
   ) => {
+    if (!requireAuth('নতুন ভ্যাকসিন বা ওষুধ যোগ করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser || !activeBatchId) return;
     const itemsList = Array.isArray(itemOrItems) ? itemOrItems : [itemOrItems];
     const newItems: MedicineScheduleItem[] = itemsList.map((item, idx) => ({
@@ -272,6 +310,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleUpdateMedicine = (item: MedicineScheduleItem) => {
+    if (!requireAuth()) return;
     if (!currentUser || !activeBatchId) return;
     PoultryStorageService.updateMedicineItem(currentUser.uid, item);
     setMedicines(PoultryStorageService.getMedicineSchedule(currentUser.uid, activeBatchId));
@@ -279,6 +318,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleDeleteMedicine = (itemId: string) => {
+    if (!requireAuth()) return;
     if (!currentUser || !activeBatchId) return;
     PoultryStorageService.deleteMedicineItem(currentUser.uid, activeBatchId, itemId);
     setMedicines(PoultryStorageService.getMedicineSchedule(currentUser.uid, activeBatchId));
@@ -286,6 +326,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleClearAllMedicines = () => {
+    if (!requireAuth()) return;
     if (!currentUser || !activeBatchId) return;
     PoultryStorageService.clearAllMedicines(currentUser.uid, activeBatchId);
     setMedicines([]);
@@ -293,6 +334,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleResetMedicineSchedule = () => {
+    if (!requireAuth()) return;
     if (!currentUser || !activeBatchId) return;
     const restored = PoultryStorageService.resetMedicineSchedule(currentUser.uid, activeBatchId);
     setMedicines(restored);
@@ -301,6 +343,7 @@ const MainApp: React.FC = () => {
 
   // Expenses
   const handleAddExpense = (exp: Omit<ExpenseRecord, 'id' | 'batchId' | 'userId'>) => {
+    if (!requireAuth('নতুন খরচের ভাউচার যুক্ত করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser || !activeBatchId) return;
     const newExpense: ExpenseRecord = {
       ...exp,
@@ -318,6 +361,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleDeleteExpense = (expId: string) => {
+    if (!requireAuth()) return;
     if (!currentUser || !activeBatchId) return;
     PoultryStorageService.deleteExpense(currentUser.uid, activeBatchId, expId);
     const updated = PoultryStorageService.getExpenses(currentUser.uid, activeBatchId);
@@ -335,6 +379,7 @@ const MainApp: React.FC = () => {
     paymentMethod: 'নগদ' | 'বিকাশ/নগদ/রকেট' | 'ব্যাংক',
     note?: string
   ) => {
+    if (!requireAuth('বকেয়া পরিশোধের তথ্য এন্ট্রি করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser || !activeBatchId) return;
     PoultryStorageService.recordDuePayment(
       currentUser.uid,
@@ -355,6 +400,7 @@ const MainApp: React.FC = () => {
 
   // Sales
   const handleAddSale = (saleData: Omit<SaleRecord, 'id' | 'batchId' | 'userId'>) => {
+    if (!requireAuth('নতুন মুরগি বিক্রয়ের হিসাব যোগ করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser || !activeBatchId) return;
     const newSale: SaleRecord = {
       ...saleData,
@@ -372,6 +418,7 @@ const MainApp: React.FC = () => {
   };
 
   const handleDeleteSale = (saleId: string) => {
+    if (!requireAuth()) return;
     if (!currentUser || !activeBatchId) return;
     PoultryStorageService.deleteSale(currentUser.uid, activeBatchId, saleId);
     const updated = PoultryStorageService.getSales(currentUser.uid, activeBatchId);
@@ -407,10 +454,47 @@ const MainApp: React.FC = () => {
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenNewBatchModal={() => setIsNewBatchOpen(true)}
-        onOpenAuthModal={() => setIsAuthOpen(true)}
+        onOpenNewBatchModal={handleOpenNewBatchModal}
+        onOpenAuthModal={() =>
+          openAuthModalWithReason('আপনার নিজস্ব খামারের তথ্য সংরক্ষণ করতে একাউন্ট তৈরি করুন বা লগইন করুন।')
+        }
         remainingDue={summary?.currentRemainingDue || 0}
       />
+
+      {/* Demo Mode Notice Banner for Visitors */}
+      {isGuest && (
+        <aside
+          aria-label="ডেমো প্রিভিউ নোটিশ"
+          className="bg-gradient-to-r from-amber-500 via-amber-600 to-emerald-600 text-white shadow-sm border-b border-amber-400/40"
+        >
+          <div className="max-w-7xl mx-auto px-4 py-2.5 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs sm:text-sm">
+            <div className="flex items-center gap-2.5 text-center sm:text-left">
+              <span className="text-lg select-none">👀</span>
+              <div>
+                <span className="font-bold bg-white/20 px-2 py-0.5 rounded-md mr-1.5 text-xs">
+                  ডেমো প্রিভিউ মোড
+                </span>
+                <span className="opacity-95">
+                  আপনি বর্তমানে ডেমো খামার দেখছেন। নিজের খামারের তথ্য সংরক্ষণ ও হিসাব শুরু করতে একাউন্ট তৈরি করুন।
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  openAuthModalWithReason(
+                    'নতুন একাউন্ট খুললে আপনার খামারের ড্যাশবোর্ড সম্পূর্ণ ব্ল্যাঙ্ক (Blank) থাকবে এবং আপনার নিজস্ব ব্যাচ শুরু করতে পারবেন।'
+                  )
+                }
+                className="px-3.5 py-1.5 bg-white text-slate-900 hover:bg-slate-100 rounded-xl text-xs font-bold whitespace-nowrap shadow-xs transition-all active:scale-95"
+              >
+                বিনামূল্যে একাউন্ট খুলুন ➔
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 pb-24 sm:pb-8">
@@ -420,7 +504,7 @@ const MainApp: React.FC = () => {
             summary={summary}
             batches={batches}
             onSelectBatch={handleSelectBatch}
-            onOpenNewBatch={() => setIsNewBatchOpen(true)}
+            onOpenNewBatch={handleOpenNewBatchModal}
             onNavigateTab={setActiveTab}
             medicines={medicines}
             recentExpenses={expenses}
@@ -436,7 +520,7 @@ const MainApp: React.FC = () => {
             batches={batches}
             growthRecords={growthRecords}
             onSelectBatch={handleSelectBatch}
-            onOpenNewBatchModal={() => setIsNewBatchOpen(true)}
+            onOpenNewBatchModal={handleOpenNewBatchModal}
             onAddGrowthRecord={handleAddGrowthRecord}
             onDeleteGrowthRecord={handleDeleteGrowthRecord}
             onToggleBatchStatus={handleToggleBatchStatus}
@@ -495,7 +579,7 @@ const MainApp: React.FC = () => {
             onSelectBatch={handleSelectBatch}
             onArchiveBatch={handleRequestArchive}
             onRestoreBatch={handleRestoreBatch}
-            onOpenNewBatchModal={() => setIsNewBatchOpen(true)}
+            onOpenNewBatchModal={handleOpenNewBatchModal}
           />
         )}
       </main>
@@ -600,7 +684,7 @@ const MainApp: React.FC = () => {
         onConfirmArchive={handleConfirmArchive}
       />
 
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   );
 };

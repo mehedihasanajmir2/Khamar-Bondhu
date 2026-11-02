@@ -5,6 +5,8 @@ import {
   auth,
   db,
   signInWithGoogle as firebaseSignInWithGoogle,
+  signInWithEmail as firebaseSignInWithEmail,
+  signUpWithEmail as firebaseSignUpWithEmail,
   logOutFirebase,
   handleFirestoreError,
   OperationType
@@ -17,11 +19,18 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   isFirebaseConnected: boolean;
   isLoading: boolean;
+  isGuest: boolean;
+  authPromptReason: string | null;
+  setAuthPromptReason: (msg: string | null) => void;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  openAuthModalWithReason: (reason?: string) => void;
   login: (email: string, password?: string) => Promise<boolean>;
   loginWithGoogle: () => Promise<boolean>;
   register: (profileData: Omit<UserProfile, 'uid' | 'registrationDate'>, password?: string) => Promise<boolean>;
   logout: () => void;
   switchUser: (uid: string) => void;
+  switchToDemo: () => void;
   updateProfile: (updatedData: Partial<UserProfile>) => void;
   allDemoUsers: UserProfile[];
 }
@@ -33,6 +42,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [authPromptReason, setAuthPromptReason] = useState<string | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+
+  // Check if UID belongs to demo profiles
+  const isDemoUid = (uid?: string | null): boolean => {
+    if (!uid) return true;
+    return DEMO_PROFILES.some((p) => p.uid === uid);
+  };
+
+  // Guest mode is true if not authenticated with Firebase AND user is a demo profile
+  const isGuest = !firebaseUser && isDemoUid(currentUser?.uid);
+
+  const openAuthModalWithReason = (reason?: string) => {
+    setAuthPromptReason(
+      reason || 'আপনার নিজস্ব খামারের তথ্য সংরক্ষণ করতে অনুগ্রহ করে একাউন্ট তৈরি করুন বা লগইন করুন।'
+    );
+    setIsAuthModalOpen(true);
+  };
 
   // Sync with Firebase Authentication state
   useEffect(() => {
@@ -52,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             PoultryStorageService.saveUser(data);
             PoultryStorageService.setActiveUserId(data.uid);
           } else {
-            // New user profile created from Firebase Google Auth
+            // New user profile created from Firebase Auth
             const displayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'খামারী';
             const newProfile: UserProfile = {
               uid: fbUser.uid,
@@ -76,7 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await PoultryStorageService.syncUserFromFirestore(fbUser.uid);
         } catch (err) {
           console.warn('Firestore profile sync error:', err);
-          // Fallback to local profile with the Firebase UID
           const localProfile: UserProfile = {
             uid: fbUser.uid,
             email: fbUser.email || '',
@@ -94,21 +120,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         setFirebaseUser(null);
-        // Fallback to active local session or default demo profile
+        // Fallback to active local session or default demo profile (Hasan)
         const activeUid = PoultryStorageService.getActiveUserId();
         if (activeUid) {
           const user = PoultryStorageService.getUserById(activeUid);
           if (user) {
             setCurrentUser(user);
           } else {
-            const defaultUser = PoultryStorageService.getUsers()[0] || DEMO_PROFILES[0];
-            setCurrentUser(defaultUser);
-            PoultryStorageService.setActiveUserId(defaultUser.uid);
+            const defaultDemo = DEMO_PROFILES[0];
+            setCurrentUser(defaultDemo);
+            PoultryStorageService.setActiveUserId(defaultDemo.uid);
           }
         } else {
-          const defaultUser = PoultryStorageService.getUsers()[0] || DEMO_PROFILES[0];
-          setCurrentUser(defaultUser);
-          PoultryStorageService.setActiveUserId(defaultUser.uid);
+          const defaultDemo = DEMO_PROFILES[0];
+          setCurrentUser(defaultDemo);
+          PoultryStorageService.setActiveUserId(defaultDemo.uid);
         }
       }
       setIsLoading(false);
@@ -126,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
         return false;
       }
+      setAuthPromptReason(null);
       return true;
     } catch (err: any) {
       setIsLoading(false);
@@ -134,17 +161,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string): Promise<boolean> => {
+  const login = async (email: string, password?: string): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    const cleanEmail = email.trim().toLowerCase();
 
-    let user = PoultryStorageService.getUserByEmail(email);
+    // Try Firebase Email Auth if password is supplied
+    if (password && password.length >= 6) {
+      try {
+        const fbUser = await firebaseSignInWithEmail(cleanEmail, password);
+        if (fbUser) {
+          setAuthPromptReason(null);
+          setIsLoading(false);
+          return true;
+        }
+      } catch (fbErr: any) {
+        console.warn('Firebase email auth sign-in error:', fbErr?.message);
+        // If user not found and password provided, bubble error or fallback to local
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    let user = PoultryStorageService.getUserByEmail(cleanEmail);
     if (!user) {
       const randomCode = Math.floor(100000 + Math.random() * 900000);
-      const username = email.split('@')[0];
+      const username = cleanEmail.split('@')[0];
       const newProfile: UserProfile = {
-        uid: `FRM-${randomCode}`,
-        email: email.trim().toLowerCase(),
+        uid: `FRM-REG-${randomCode}`,
+        email: cleanEmail,
         name: `${username} (খামারী)`,
         farmName: `${username} পোল্ট্রি খামার`,
         phone: '০১৭০০-০০০০০০',
@@ -159,23 +202,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setCurrentUser(user);
     PoultryStorageService.setActiveUserId(user.uid);
+    setAuthPromptReason(null);
     setIsLoading(false);
     return true;
   };
 
   const register = async (
-    profileData: Omit<UserProfile, 'uid' | 'registrationDate'>
+    profileData: Omit<UserProfile, 'uid' | 'registrationDate'>,
+    password?: string
   ): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    const cleanEmail = profileData.email.trim().toLowerCase();
 
+    // Try Firebase Email Registration if password provided
+    if (password && password.length >= 6) {
+      try {
+        const fbUser = await firebaseSignUpWithEmail(cleanEmail, password);
+        if (fbUser) {
+          const newProfile: UserProfile = {
+            ...profileData,
+            email: cleanEmail,
+            uid: fbUser.uid,
+            registrationDate: new Date().toISOString().split('T')[0]
+          };
+
+          try {
+            await setDoc(doc(db, 'users', fbUser.uid), newProfile);
+          } catch (e) {
+            console.warn('Firestore setDoc failed:', e);
+          }
+
+          setCurrentUser(newProfile);
+          PoultryStorageService.saveUser(newProfile);
+          PoultryStorageService.setActiveUserId(newProfile.uid);
+          setAuthPromptReason(null);
+          setIsLoading(false);
+          return true;
+        }
+      } catch (fbErr: any) {
+        console.warn('Firebase email sign-up error, proceeding with local registered user:', fbErr?.message);
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
     const randomCode = Math.floor(100000 + Math.random() * 900000);
     const newUid = `FRM-REG-${randomCode}`;
 
     const newProfile: UserProfile = {
       ...profileData,
       uid: newUid,
-      email: profileData.email.trim().toLowerCase(),
+      email: cleanEmail,
       registrationDate: new Date().toISOString().split('T')[0]
     };
 
@@ -183,7 +259,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(newProfile);
     PoultryStorageService.setActiveUserId(newUid);
 
-    // If authenticated in Firebase, sync to Firestore
     if (auth.currentUser) {
       try {
         await setDoc(doc(db, 'users', auth.currentUser.uid), newProfile);
@@ -192,6 +267,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    setAuthPromptReason(null);
     setIsLoading(false);
     return true;
   };
@@ -202,8 +278,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.warn('Firebase logout failed:', err);
     }
-    PoultryStorageService.setActiveUserId(null);
-    setCurrentUser(null);
+    // Return to demo mode
+    const demoUser = DEMO_PROFILES[0];
+    PoultryStorageService.setActiveUserId(demoUser.uid);
+    setCurrentUser(demoUser);
+  };
+
+  const switchToDemo = () => {
+    const demoUser = DEMO_PROFILES[0];
+    PoultryStorageService.setActiveUserId(demoUser.uid);
+    setCurrentUser(demoUser);
   };
 
   const switchUser = (uid: string) => {
@@ -241,11 +325,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firebaseUser,
         isFirebaseConnected,
         isLoading,
+        isGuest,
+        authPromptReason,
+        setAuthPromptReason,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        openAuthModalWithReason,
         login,
         loginWithGoogle,
         register,
         logout,
         switchUser,
+        switchToDemo,
         updateProfile,
         allDemoUsers: PoultryStorageService.getUsers()
       }}

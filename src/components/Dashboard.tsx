@@ -47,21 +47,63 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   if (!activeBatch || !summary) {
     return (
-      <div className="py-16 text-center max-w-xl mx-auto px-4">
-        <div className="w-20 h-20 mx-auto rounded-3xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 shadow-inner">
-          <Layers className="w-10 h-10" />
+      <div className="py-12 max-w-4xl mx-auto px-4">
+        {/* Welcome Card for Fresh / Blank Account */}
+        <div className="bg-gradient-to-br from-emerald-600 via-teal-700 to-emerald-900 rounded-3xl p-8 sm:p-10 text-white shadow-xl shadow-emerald-900/10 mb-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-60 h-60 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+          
+          <div className="relative z-10 max-w-2xl">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-white/20 text-white backdrop-blur-xs mb-4">
+              ✨ নতুন খামার যাত্রা শুরু
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black mb-3 leading-tight">
+              স্বাগতম! আপনার ডিজিটাল খামার ড্যাশবোর্ড সম্পূর্ণ প্রস্তুত
+            </h2>
+            <p className="text-emerald-100 text-sm sm:text-base leading-relaxed mb-6">
+              আপনার খামারে বর্তমানে কোনো সক্রিয় ব্যাচ নেই (সম্পূর্ণ পরিষ্কার / Blank)। আপনার প্রথম ব্যাচ তৈরি করে বাচ্চার ওজন, খাদ্য, টিকা এবং লাভ-ক্ষতির নিখুঁত হিসাব সংরক্ষণ শুরু করুন।
+            </p>
+            <button
+              onClick={onOpenNewBatch}
+              className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white hover:bg-emerald-50 text-emerald-900 font-extrabold shadow-lg shadow-black/10 transition-all hover:scale-105 active:scale-95 text-sm sm:text-base"
+            >
+              <PlusCircle className="w-5 h-5 text-emerald-700" />
+              <span>আপনার প্রথম ব্যাচ শুরু করুন</span>
+            </button>
+          </div>
         </div>
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">কোনো সক্রিয় ব্যাচ পাওয়া যায়নি</h2>
-        <p className="text-slate-600 text-sm mb-6 leading-relaxed">
-          আপনার পোল্ট্রি ফার্মের হিসাব ও ট্র্যাকিং শুরু করতে একটি নতুন ব্যাচ খুলুন। সেখানে বাচ্চা সংখ্যা, শুরুর তারিখ ও জাত নির্ধারণ করতে পারবেন।
-        </p>
-        <button
-          onClick={onOpenNewBatch}
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/30 transition-all hover:scale-105"
-        >
-          <PlusCircle className="w-5 h-5" />
-          নতুন ব্যাচ শুরু করুন
-        </button>
+
+        {/* 3 Simple Steps Guide */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl font-bold mb-4">
+              🐣
+            </div>
+            <h3 className="font-bold text-slate-900 text-base mb-1.5">১. ব্যাচ তৈরি করুন</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              বাচ্চার জাত (ব্রয়লার, সোনালী বা লেয়ার), মোট বাচ্চার সংখ্যা এবং প্রতিটি বাচ্চার রেট প্রদান করে ব্যাচ শুরু করুন।
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all">
+            <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center text-xl font-bold mb-4">
+              ⚖️
+            </div>
+            <h3 className="font-bold text-slate-900 text-base mb-1.5">২. দৈনিক ওজন ও বৃদ্ধি</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              প্রতি সপ্তাহে ৫ বা ১০টি পাখির নমুনা ওজন ও প্রতিদিনের খাবার লিখে এফসিআর (FCR) এবং শারীরিক বৃদ্ধি পর্যবেক্ষণ করুন।
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl font-bold mb-4">
+              📊
+            </div>
+            <h3 className="font-bold text-slate-900 text-base mb-1.5">৩. লাভ ও টিকার হিসাব</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              টিকার শিডিউল নোটিফিকেশন পান এবং মুরগি বিক্রির পর স্বয়ংক্রিয়ভাবে মোট আয়, মোট খরচ ও নিট লাভ হিসাব করুন।
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
