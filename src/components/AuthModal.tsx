@@ -82,6 +82,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       } else {
         await login(trimmed, password);
       }
+      setError('');
+      setPassword('');
       handleClose();
     } catch (err: any) {
       setError(err?.message || 'লগইন বা নিবন্ধনে সমস্যা হয়েছে।');

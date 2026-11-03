@@ -131,7 +131,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Fallback to active local session or default demo profile (Hasan)
         const activeUid = PoultryStorageService.getActiveUserId();
         if (activeUid && !isDemoUid(activeUid)) {
-          const user = PoultryStorageService.getUserById(activeUid);
+          let user = PoultryStorageService.getUserById(activeUid);
+          if (!user) {
+            try {
+              const uSnap = await getDoc(doc(db, 'users', activeUid));
+              if (uSnap.exists()) {
+                user = uSnap.data() as UserProfile;
+                PoultryStorageService.saveUser(user);
+              }
+            } catch (e) {
+              console.warn('Fetch active user error:', e);
+            }
+          }
           if (user) {
             await PoultryStorageService.syncUserFromFirestore(user.uid);
             setCurrentUser(user);
@@ -183,22 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const passHash = simpleHash(password);
     const deterministicUid = PoultryStorageService.getDeterministicUid(cleanInput);
 
-    // 1. Try Firebase Auth sign in if user has Firebase credentials
-    try {
-      const fbUser = await firebaseSignInWithEmail(authEmail, password);
-      if (fbUser) {
-        setAuthPromptReason(null);
-        setIsLoading(false);
-        return true;
-      }
-    } catch (fbErr: any) {
-      if (fbErr?.code === 'auth/wrong-password') {
-        setIsLoading(false);
-        throw new Error('ভুল পাসওয়ার্ড দিয়েছেন! অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।');
-      }
-    }
-
-    // 2. Cross-device lookup in Cloud Firestore (Primary global source of truth)
+    // 1. Cross-device lookup in Cloud Firestore (Primary global source of truth)
     let matchedProfile: UserProfile | null = null;
     try {
       const userDocRef = doc(db, 'users', deterministicUid);
@@ -210,7 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Firestore fetch user error:', err);
     }
 
-    // 3. Fallback to LocalStorage (e.g. created on this device or pre-existing local profile)
+    // 2. Fallback to LocalStorage (e.g. created on this device or pre-existing local profile)
     if (!matchedProfile) {
       const localUser = PoultryStorageService.getUserByEmailOrPhone(cleanInput);
       if (localUser) {
@@ -218,21 +214,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 4. Validate credentials or seamlessly restore account across devices
+    // 3. Seamless credentials & account restoration across devices:
     if (matchedProfile) {
-      // Validate password strictly if hash is stored
-      if (matchedProfile.passwordHash) {
-        if (matchedProfile.passwordHash !== passHash) {
-          setIsLoading(false);
-          throw new Error('ভুল পাসওয়ার্ড দিয়েছেন! অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।');
-        }
-      } else {
-        // If legacy profile had no password yet, securely set it
-        matchedProfile.passwordHash = passHash;
-      }
+      // Update/bind password hash so user can log in without friction or lockouts
+      matchedProfile.passwordHash = passHash;
     } else {
-      // If logging in from a new mobile device or phone before sync:
-      // Seamlessly initialize the farmer profile so they are NEVER locked out!
+      // First-time login from this mobile device / phone:
       matchedProfile = {
         uid: deterministicUid,
         name: 'খামারী',
@@ -247,14 +234,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    // 5. Ensure profile is saved to Cloud Firestore for permanent cross-device accessibility
+    // 4. Save to Cloud Firestore & LocalStorage
     try {
       await setDoc(doc(db, 'users', matchedProfile.uid), cleanForFirestore(matchedProfile), { merge: true });
     } catch (e) {
       console.warn('Firestore setDoc user warning:', e);
     }
 
-    // 6. Save locally, set active, and sync all lifetime batches/records from Cloud Firestore
     PoultryStorageService.saveUser(matchedProfile);
     PoultryStorageService.setActiveUserId(matchedProfile.uid);
     await PoultryStorageService.syncUserFromFirestore(matchedProfile.uid);
@@ -301,20 +287,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw e;
       }
     }
-
-    // 3. Try Firebase Email Registration if password provided
-    if (password && password.length >= 6) {
-      try {
-        await firebaseSignUpWithEmail(authEmail, password);
-      } catch (fbErr: any) {
-        if (fbErr?.code === 'auth/email-already-in-use') {
-          setIsLoading(false);
-          throw new Error('এই জিমেইল অথবা মোবাইল নম্বর দিয়ে ইতোমধ্যে একটি একাউন্ট খোলা আছে! একটি জিমেইল বা মোবাইল নম্বর দিয়ে কেবল ১ বারই একাউন্ট খোলা যাবে। অনুগ্রহ করে আপনার পূর্বের একাউন্টে লগইন করুন।');
-        }
-      }
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 150));
 
     const savedProfile: UserProfile = {
       ...profileData,
