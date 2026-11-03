@@ -133,59 +133,59 @@ export class PoultryStorageService {
       }
 
       const remoteBatches: Batch[] = [];
-      for (const batchDoc of batchSnaps.docs) {
-        const batchData = batchDoc.data() as Batch;
-        remoteBatches.push(batchData);
-        const batchId = batchData.id;
+      await Promise.all(
+        batchSnaps.docs.map(async (batchDoc) => {
+          const batchData = batchDoc.data() as Batch;
+          remoteBatches.push(batchData);
+          const batchId = batchData.id;
 
-        // Sync growth
-        try {
-          const gSnaps = await getDocs(collection(db, 'users', userId, 'batches', batchId, 'growth'));
-          const growthList: GrowthRecord[] = [];
-          gSnaps.forEach((d) => growthList.push(d.data() as GrowthRecord));
-          if (growthList.length > 0) {
-            localStorage.setItem(this.getKey(`growth_${batchId}`, userId), JSON.stringify(growthList));
-          }
-        } catch (e) {
-          console.warn('Sync growth error:', e);
-        }
+          await Promise.all([
+            // Sync growth in parallel
+            getDocs(collection(db, 'users', userId, 'batches', batchId, 'growth'))
+              .then((gSnaps) => {
+                const growthList: GrowthRecord[] = [];
+                gSnaps.forEach((d) => growthList.push(d.data() as GrowthRecord));
+                if (growthList.length > 0) {
+                  localStorage.setItem(this.getKey(`growth_${batchId}`, userId), JSON.stringify(growthList));
+                }
+              })
+              .catch((e) => console.warn('Sync growth error:', e)),
 
-        // Sync medicines
-        try {
-          const mSnaps = await getDocs(collection(db, 'users', userId, 'batches', batchId, 'medicines'));
-          const medList: MedicineScheduleItem[] = [];
-          mSnaps.forEach((d) => medList.push(d.data() as MedicineScheduleItem));
-          if (medList.length > 0) {
-            localStorage.setItem(this.getKey(`meds_${batchId}`, userId), JSON.stringify(medList));
-          }
-        } catch (e) {
-          console.warn('Sync medicines error:', e);
-        }
+            // Sync medicines in parallel
+            getDocs(collection(db, 'users', userId, 'batches', batchId, 'medicines'))
+              .then((mSnaps) => {
+                const medList: MedicineScheduleItem[] = [];
+                mSnaps.forEach((d) => medList.push(d.data() as MedicineScheduleItem));
+                if (medList.length > 0) {
+                  localStorage.setItem(this.getKey(`meds_${batchId}`, userId), JSON.stringify(medList));
+                }
+              })
+              .catch((e) => console.warn('Sync medicines error:', e)),
 
-        // Sync expenses
-        try {
-          const eSnaps = await getDocs(collection(db, 'users', userId, 'batches', batchId, 'expenses'));
-          const expList: ExpenseRecord[] = [];
-          eSnaps.forEach((d) => expList.push(d.data() as ExpenseRecord));
-          if (expList.length > 0) {
-            localStorage.setItem(this.getKey(`expenses_${batchId}`, userId), JSON.stringify(expList));
-          }
-        } catch (e) {
-          console.warn('Sync expenses error:', e);
-        }
+            // Sync expenses in parallel
+            getDocs(collection(db, 'users', userId, 'batches', batchId, 'expenses'))
+              .then((eSnaps) => {
+                const expList: ExpenseRecord[] = [];
+                eSnaps.forEach((d) => expList.push(d.data() as ExpenseRecord));
+                if (expList.length > 0) {
+                  localStorage.setItem(this.getKey(`expenses_${batchId}`, userId), JSON.stringify(expList));
+                }
+              })
+              .catch((e) => console.warn('Sync expenses error:', e)),
 
-        // Sync sales
-        try {
-          const sSnaps = await getDocs(collection(db, 'users', userId, 'batches', batchId, 'sales'));
-          const saleList: SaleRecord[] = [];
-          sSnaps.forEach((d) => saleList.push(d.data() as SaleRecord));
-          if (saleList.length > 0) {
-            localStorage.setItem(this.getKey(`sales_${batchId}`, userId), JSON.stringify(saleList));
-          }
-        } catch (e) {
-          console.warn('Sync sales error:', e);
-        }
-      }
+            // Sync sales in parallel
+            getDocs(collection(db, 'users', userId, 'batches', batchId, 'sales'))
+              .then((sSnaps) => {
+                const saleList: SaleRecord[] = [];
+                sSnaps.forEach((d) => saleList.push(d.data() as SaleRecord));
+                if (saleList.length > 0) {
+                  localStorage.setItem(this.getKey(`sales_${batchId}`, userId), JSON.stringify(saleList));
+                }
+              })
+              .catch((e) => console.warn('Sync sales error:', e))
+          ]);
+        })
+      );
 
       // Merge remote and local batches without dropping anything
       const mergedMap = new Map<string, Batch>();

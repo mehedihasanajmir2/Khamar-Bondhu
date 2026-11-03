@@ -194,32 +194,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const passHash = simpleHash(password);
     const deterministicUid = PoultryStorageService.getDeterministicUid(cleanInput);
 
-    // 1. Cross-device lookup in Cloud Firestore (Primary global source of truth)
-    let matchedProfile: UserProfile | null = null;
+    // 1. Instant check in LocalStorage (< 50ms)
+    let matchedProfile =
+      PoultryStorageService.getUserById(deterministicUid) ||
+      PoultryStorageService.getUserByEmailOrPhone(cleanInput);
+
+    if (matchedProfile) {
+      matchedProfile.passwordHash = passHash;
+      PoultryStorageService.saveUser(matchedProfile);
+      PoultryStorageService.setActiveUserId(matchedProfile.uid);
+      setCurrentUser(matchedProfile);
+      setSyncVersion((v) => v + 1);
+      setAuthPromptReason(null);
+      setIsLoading(false);
+
+      // Background cloud sync (non-blocking)
+      const userUid = matchedProfile.uid;
+      const cached = matchedProfile;
+      setTimeout(() => {
+        setDoc(doc(db, 'users', userUid), cleanForFirestore(cached), { merge: true })
+          .then(() => PoultryStorageService.syncUserFromFirestore(userUid))
+          .then((synced) => {
+            if (synced) setSyncVersion((v) => v + 1);
+          })
+          .catch((err) => console.warn('Background sync error:', err));
+      }, 0);
+
+      return true;
+    }
+
+    // 2. Cross-device lookup in Cloud Firestore with a fast 1.5s timeout!
     try {
       const userDocRef = doc(db, 'users', deterministicUid);
-      const userSnap = await getDoc(userDocRef);
-      if (userSnap.exists()) {
+      const userSnap: any = await Promise.race([
+        getDoc(userDocRef),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500))
+      ]);
+      if (userSnap && typeof userSnap.exists === 'function' && userSnap.exists()) {
         matchedProfile = userSnap.data() as UserProfile;
+        matchedProfile.passwordHash = passHash;
       }
     } catch (err) {
       console.warn('Firestore fetch user error:', err);
     }
 
-    // 2. Fallback to LocalStorage (e.g. created on this device or pre-existing local profile)
+    // 3. Fallback / First-time account initialization
     if (!matchedProfile) {
-      const localUser = PoultryStorageService.getUserByEmailOrPhone(cleanInput);
-      if (localUser) {
-        matchedProfile = localUser;
-      }
-    }
-
-    // 3. Seamless credentials & account restoration across devices:
-    if (matchedProfile) {
-      // Update/bind password hash so user can log in without friction or lockouts
-      matchedProfile.passwordHash = passHash;
-    } else {
-      // First-time login from this mobile device / phone:
       matchedProfile = {
         uid: deterministicUid,
         name: 'খামারী',
@@ -234,21 +254,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    // 4. Save to Cloud Firestore & LocalStorage
-    try {
-      await setDoc(doc(db, 'users', matchedProfile.uid), cleanForFirestore(matchedProfile), { merge: true });
-    } catch (e) {
-      console.warn('Firestore setDoc user warning:', e);
-    }
-
+    // 4. Save and activate user immediately (User is logged in right away!)
     PoultryStorageService.saveUser(matchedProfile);
     PoultryStorageService.setActiveUserId(matchedProfile.uid);
-    await PoultryStorageService.syncUserFromFirestore(matchedProfile.uid);
-
     setCurrentUser(matchedProfile);
     setSyncVersion((v) => v + 1);
     setAuthPromptReason(null);
     setIsLoading(false);
+
+    // 5. Background sync for batches & subcollections (non-blocking)
+    const activeUid = matchedProfile.uid;
+    const finalProfile = matchedProfile;
+    setTimeout(() => {
+      setDoc(doc(db, 'users', activeUid), cleanForFirestore(finalProfile), { merge: true })
+        .then(() => PoultryStorageService.syncUserFromFirestore(activeUid))
+        .then((synced) => {
+          if (synced) setSyncVersion((v) => v + 1);
+        })
+        .catch((e) => console.warn('Background sync error:', e));
+    }, 0);
+
     return true;
   };
 
@@ -271,16 +296,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isTakenLocally = PoultryStorageService.isEmailOrPhoneTaken(cleanInput, profileData.phone);
     if (isTakenLocally) {
       setIsLoading(false);
-      throw new Error('এই জিমেইল অথবা মোবাইল নম্বর দিয়ে ইতোমধ্যে একটি একাউন্ট খোলা আছে! একটি জিমেইল বা মোবাইল নম্বর দিয়ে কেবল ১ বারই একাউন্ট খোলা যাবে। অনুগ্রহ করে আপনার পূর্বের একাউন্টে লগইন করুন।');
+      throw new Error(
+        'এই জিমেইল অথবা মোবাইল নম্বর দিয়ে ইতোমধ্যে একটি একাউন্ট খোলা আছে! একটি জিমেইল বা মোবাইল নম্বর দিয়ে কেবল ১ বারই একাউন্ট খোলা যাবে। অনুগ্রহ করে আপনার পূর্বের একাউন্টে লগইন করুন।'
+      );
     }
 
-    // 2. Strict uniqueness check against Cloud Firestore
+    // 2. Strict uniqueness check against Cloud Firestore with fast timeout
     try {
       const userDocRef = doc(db, 'users', uid);
-      const existingDoc = await getDoc(userDocRef);
-      if (existingDoc.exists()) {
+      const existingDoc: any = await Promise.race([
+        getDoc(userDocRef),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200))
+      ]);
+      if (existingDoc && typeof existingDoc.exists === 'function' && existingDoc.exists()) {
         setIsLoading(false);
-        throw new Error('এই জিমেইল অথবা মোবাইল নম্বর দিয়ে ইতোমধ্যে একটি একাউন্ট খোলা আছে! একটি জিমেইল বা মোবাইল নম্বর দিয়ে কেবল ১ বারই একাউন্ট খোলা যাবে। অনুগ্রহ করে আপনার পূর্বের একাউন্টে লগইন করুন।');
+        throw new Error(
+          'এই জিমেইল অথবা মোবাইল নম্বর দিয়ে ইতোমধ্যে একটি একাউন্ট খোলা আছে! একটি জিমেইল বা মোবাইল নম্বর দিয়ে কেবল ১ বারই একাউন্ট খোলা যাবে। অনুগ্রহ করে আপনার পূর্বের একাউন্টে লগইন করুন।'
+        );
       }
     } catch (e: any) {
       if (e.message && e.message.includes('ইতোমধ্যে একটি একাউন্ট খোলা আছে')) {
@@ -297,21 +329,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       passwordHash: passHash
     };
 
-    // Save directly to Cloud Firestore so any device can immediately log in
-    try {
-      await setDoc(doc(db, 'users', uid), cleanForFirestore(savedProfile), { merge: true });
-    } catch (err) {
-      console.warn('Firestore setDoc user error:', err);
-    }
-
+    // Activate immediately on this device
     PoultryStorageService.saveUser(savedProfile);
     PoultryStorageService.setActiveUserId(uid);
-    await PoultryStorageService.syncUserFromFirestore(uid);
-
     setCurrentUser(savedProfile);
     setSyncVersion((v) => v + 1);
     setAuthPromptReason(null);
     setIsLoading(false);
+
+    // Async push to Cloud Firestore in background
+    setTimeout(() => {
+      setDoc(doc(db, 'users', uid), cleanForFirestore(savedProfile), { merge: true })
+        .then(() => PoultryStorageService.syncUserFromFirestore(uid))
+        .catch((err) => console.warn('Firestore setDoc user error:', err));
+    }, 0);
+
     return true;
   };
 

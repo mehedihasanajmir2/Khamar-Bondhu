@@ -42,14 +42,110 @@ interface MedicineScheduleProps {
   onResetToDefault: () => void;
 }
 
+// Available dose timings / application times
+export interface MedicineTimingOption {
+  id: string;
+  label: string;
+  shortLabel: string;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+  defaultDosageNote: string;
+  icon: string;
+}
+
+export const MEDICINE_TIMING_OPTIONS: MedicineTimingOption[] = [
+  {
+    id: 'সকাল ও রাতে',
+    label: '🌅 🌙 সকাল ও রাতে (দিনে ২ বার)',
+    shortLabel: 'সকাল ও রাতে',
+    badgeBg: 'bg-indigo-50',
+    badgeText: 'text-indigo-800',
+    badgeBorder: 'border-indigo-200',
+    defaultDosageNote: 'সকালে ও রাতে খাবার পানির সাথে (১ লিটারে ১ মিলি/গ্রাম)',
+    icon: '🌅🌙'
+  },
+  {
+    id: 'দুপুর ও রাতে',
+    label: '☀️ 🌙 দুপুর ও রাতে (দিনে ২ বার)',
+    shortLabel: 'দুপুর ও রাতে',
+    badgeBg: 'bg-purple-50',
+    badgeText: 'text-purple-800',
+    badgeBorder: 'border-purple-200',
+    defaultDosageNote: 'দুপুরে ও রাতে খাবার পানির সাথে (১ লিটারে ১ মিলি/গ্রাম)',
+    icon: '☀️🌙'
+  },
+  {
+    id: 'সকালে',
+    label: '🌅 সকালে (১ম পানি)',
+    shortLabel: 'সকালে',
+    badgeBg: 'bg-amber-50',
+    badgeText: 'text-amber-800',
+    badgeBorder: 'border-amber-200',
+    defaultDosageNote: 'সকালে ১ লিটার পানিতে ১ মিলি',
+    icon: '🌅'
+  },
+  {
+    id: 'দুপুরে',
+    label: '☀️ দুপুরে (২য় পানি)',
+    shortLabel: 'দুপুরে',
+    badgeBg: 'bg-orange-50',
+    badgeText: 'text-orange-800',
+    badgeBorder: 'border-orange-200',
+    defaultDosageNote: 'দুপুরে ১ লিটার পানিতে ১ মিলি',
+    icon: '☀️'
+  },
+  {
+    id: 'রাতে',
+    label: '🌙 রাতে (৩য় পানি)',
+    shortLabel: 'রাতে',
+    badgeBg: 'bg-blue-50',
+    badgeText: 'text-blue-800',
+    badgeBorder: 'border-blue-200',
+    defaultDosageNote: 'রাতে ১ লিটার পানিতে ১ গ্রাম',
+    icon: '🌙'
+  },
+  {
+    id: 'সকাল, দুপুর ও রাত',
+    label: '🌅 ☀️ 🌙 সকাল, দুপুর ও রাত (দিনে ৩ বার)',
+    shortLabel: 'দিনে ৩ বার',
+    badgeBg: 'bg-teal-50',
+    badgeText: 'text-teal-800',
+    badgeBorder: 'border-teal-200',
+    defaultDosageNote: 'সকাল, দুপুর ও রাতে খাবার পানির সাথে',
+    icon: '🌅☀️🌙'
+  },
+  {
+    id: 'সারাদিন পানিতে',
+    label: '💧 সারাদিন পানিতে (২৪ ঘণ্টা)',
+    shortLabel: 'সারাদিন পানিতে',
+    badgeBg: 'bg-sky-50',
+    badgeText: 'text-sky-800',
+    badgeBorder: 'border-sky-200',
+    defaultDosageNote: 'সারাদিন ২৪ ঘণ্টা খাবার পানির সাথে',
+    icon: '💧'
+  },
+  {
+    id: 'প্রয়োজন অনুযায়ী',
+    label: '🕒 প্রয়োজন অনুযায়ী / অন্যান্য',
+    shortLabel: 'প্রয়োজন অনুযায়ী',
+    badgeBg: 'bg-slate-100',
+    badgeText: 'text-slate-800',
+    badgeBorder: 'border-slate-200',
+    defaultDosageNote: 'প্রয়োজন অনুযায়ী নিয়ম মেনে',
+    icon: '🕒'
+  }
+];
+
 // Single row interface inside a multi-medicine sheet
 interface MedicineSheetRow {
   id: string;
+  isExisting?: boolean; // Whether this row is an existing saved item being edited
   medicineName: string;
   symptoms: string;
   timingAndDosage: string;
   medicineType: MedicineScheduleItem['medicineType'];
-  timeOfDay: 'সকাল' | 'দুপুর' | 'রাত' | 'সারাদিন' | 'পানির সাথে';
+  timeOfDay: string;
   notes: string;
 }
 
@@ -201,6 +297,38 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
     return Array.from(daysSet).sort((a, b) => a - b);
   }, [medicines]);
 
+  // Helper to render dose timing badge with icons and colors
+  const renderTimingBadge = (timeOfDay?: string) => {
+    if (!timeOfDay) return null;
+    const match = MEDICINE_TIMING_OPTIONS.find(
+      (opt) =>
+        opt.id === timeOfDay ||
+        (timeOfDay === 'সকাল' && opt.id === 'সকালে') ||
+        (timeOfDay === 'দুপুর' && opt.id === 'দুপুরে') ||
+        (timeOfDay === 'রাত' && opt.id === 'রাতে') ||
+        (timeOfDay.includes('সকাল ও রাত') && opt.id === 'সকাল ও রাতে') ||
+        (timeOfDay.includes('দুপুর ও রাত') && opt.id === 'দুপুর ও রাতে')
+    );
+
+    if (match) {
+      return (
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${match.badgeBg} ${match.badgeText} ${match.badgeBorder}`}
+        >
+          <span>{match.icon}</span>
+          <span>{match.shortLabel}</span>
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+        <Clock className="w-3 h-3 text-slate-500" />
+        <span>{timeOfDay}</span>
+      </span>
+    );
+  };
+
   // Open modal for adding a new multi-medicine sheet
   const handleOpenAddModal = (presetDay?: number, defaultCourseDays = '1') => {
     setEditingItem(null);
@@ -209,18 +337,19 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
     setSheetRows([
       {
         id: `row_${Date.now()}_1`,
+        isExisting: false,
         medicineName: '',
         symptoms: '',
-        timingAndDosage: 'সকালে ১ লিটার পানিতে ১ মিলি',
+        timingAndDosage: 'সকালে ও রাতে খাবার পানির সাথে (১ লিটারে ১ মিলি/গ্রাম)',
         medicineType: 'ভিটামিন / মিনারেল',
-        timeOfDay: 'সকাল',
+        timeOfDay: 'সকাল ও রাতে',
         notes: ''
       }
     ]);
     setShowModal(true);
   };
 
-  // Open modal for editing an existing item
+  // Open modal for editing an existing item (also allows adding extra new medicines to that day!)
   const handleOpenEditModal = (item: MedicineScheduleItem) => {
     setEditingItem(item);
     setDayAge(item.dayAge.toString());
@@ -228,11 +357,12 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
     setSheetRows([
       {
         id: item.id,
+        isExisting: true,
         medicineName: item.medicineName,
         symptoms: item.symptoms || item.purpose || '',
         timingAndDosage: item.timingAndDosage || item.dosage || '',
         medicineType: item.medicineType || 'অন্যান্য ওষুধ',
-        timeOfDay: item.timeOfDay || 'পানির সাথে',
+        timeOfDay: item.timeOfDay || 'সকাল ও রাতে',
         notes: item.notes || ''
       }
     ]);
@@ -240,17 +370,20 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
     setShowModal(true);
   };
 
-  // Add another medicine row to the sheet
+  // Add another medicine row to the sheet (works in both Add and Edit modes)
   const handleAddRow = () => {
     const nextIndex = sheetRows.length + 1;
-    let defaultTime: MedicineSheetRow['timeOfDay'] = 'সকাল';
-    let defaultTiming = 'সকালে ১ লিটার পানিতে ১ মিলি';
+    let defaultTime = 'সকাল ও রাতে';
+    let defaultTiming = 'সকালে ও রাতে খাবার পানির সাথে (১ লিটারে ১ মিলি/গ্রাম)';
 
     if (nextIndex === 2) {
-      defaultTime = 'দুপুর';
-      defaultTiming = 'দুপুরে ১ লিটার পানিতে ১ মিলি';
+      defaultTime = 'দুপুর ও রাতে';
+      defaultTiming = 'দুপুরে ও রাতে খাবার পানির সাথে (১ লিটারে ১ মিলি/গ্রাম)';
     } else if (nextIndex === 3) {
-      defaultTime = 'রাত';
+      defaultTime = 'সকালে';
+      defaultTiming = 'সকালে ১ লিটার পানিতে ১ মিলি';
+    } else if (nextIndex === 4) {
+      defaultTime = 'রাতে';
       defaultTiming = 'রাতে ১ লিটার পানিতে ১ গ্রাম';
     }
 
@@ -258,6 +391,7 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
       ...sheetRows,
       {
         id: `row_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+        isExisting: false,
         medicineName: '',
         symptoms: '',
         timingAndDosage: defaultTiming,
@@ -292,6 +426,7 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
     setSheetRows(
       combo.rows.map((r, i) => ({
         id: `row_combo_${Date.now()}_${i}`,
+        isExisting: false,
         medicineName: r.medicineName,
         symptoms: r.symptoms,
         timingAndDosage: r.timingAndDosage,
@@ -316,7 +451,7 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
     }
 
     if (editingItem) {
-      // Editing single item
+      // 1. Update the existing item (first valid row)
       const firstRow = validRows[0];
       if (editScope === 'allCourse' && editingItem.courseId) {
         // Update all items in this course group
@@ -350,6 +485,32 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
           notes: firstRow.notes.trim(),
           isCustom: true
         });
+      }
+
+      // 2. If the user also added new medicine rows while in edit mode, add them to this day!
+      if (validRows.length > 1) {
+        const extraRows = validRows.slice(1);
+        const newItemsToAdd: Array<Omit<MedicineScheduleItem, 'id' | 'batchId' | 'userId'>> = extraRows.map((row) => {
+          const trimmedName = row.medicineName.trim();
+          const trimmedSymptoms = row.symptoms.trim() || 'সাধারণ রোগ প্রতিরোধ ও সুস্থতা';
+          const trimmedTiming = row.timingAndDosage.trim() || 'প্যাকেটের নির্দেশ অনুযায়ী পানির সাথে';
+
+          return {
+            dayAge: startDay,
+            medicineName: trimmedName,
+            symptoms: trimmedSymptoms,
+            timingAndDosage: trimmedTiming,
+            purpose: trimmedSymptoms,
+            dosage: trimmedTiming,
+            medicineType: row.medicineType,
+            timeOfDay: row.timeOfDay,
+            status: 'pending',
+            notes: row.notes.trim() || `এডিট করার সময় যুক্ত ওষুধ (${toBnNumber(startDay)}তম দিন)`,
+            isCustom: true
+          };
+        });
+
+        onAddMedicine(newItemsToAdd);
       }
     } else {
       // Adding new multi-medicine sheet across duration days
@@ -802,14 +963,14 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                       <td className="py-3 px-3 sm:px-4 align-middle">
                         <div className="flex items-start gap-1.5">
                           <Clock3 className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
-                          <div>
+                          <div className="space-y-1">
                             <span className="text-xs text-slate-700 font-semibold leading-relaxed block">
                               {displayTiming}
                             </span>
                             {item.timeOfDay && (
-                              <span className="text-[10px] font-bold text-slate-500">
-                                প্রয়োগকাল: <strong>{item.timeOfDay}</strong>
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {renderTimingBadge(item.timeOfDay)}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -972,9 +1133,12 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                     </div>
 
                     {/* Timing & Dosage Field */}
-                    <div className="text-xs text-slate-700 flex items-center gap-1.5 font-semibold pt-0.5">
-                      <Clock3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span><strong>কখন ও কীভাবে খাওয়াতে হবে:</strong> {displayTiming}</span>
+                    <div className="text-xs text-slate-700 flex items-center gap-2 font-semibold pt-0.5 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <Clock3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span><strong>খাওয়ানোর নিয়ম:</strong> {displayTiming}</span>
+                      </div>
+                      {item.timeOfDay && renderTimingBadge(item.timeOfDay)}
                     </div>
 
                     {item.notes && (
@@ -1207,16 +1371,14 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                     ওষুধের তালিকা ({toBnNumber(sheetRows.length)} টি ওষুধ এই শীটে)
                   </span>
                   
-                  {!editingItem && (
-                    <button
-                      type="button"
-                      onClick={handleAddRow}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition-colors border border-emerald-200/70"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      + আরও ওষুধ যোগ করুন
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddRow}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition-colors border border-emerald-200/70"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {editingItem ? '+ এই দিনে আরও নতুন ওষুধ যোগ করুন' : '+ আরও ওষুধ যোগ করুন'}
+                  </button>
                 </div>
 
                 {sheetRows.map((row, index) => (
@@ -1224,52 +1386,79 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                     key={row.id}
                     className="p-4 rounded-2xl border border-slate-200 bg-white shadow-2xs space-y-3 relative hover:border-slate-300 transition-colors"
                   >
-                    {/* Row Header: Number, Time of Day, and Delete Row */}
+                    {/* Row Header: Number, Existing/New badge, and Delete Row */}
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                       <div className="flex items-center gap-2">
                         <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs">
                           {toBnNumber(index + 1)}
                         </span>
                         <span className="text-xs font-bold text-slate-800">
-                          ওষুধ #{toBnNumber(index + 1)}
+                          {row.isExisting
+                            ? 'ওষুধ #১ (বর্তমান ওষুধ সম্পাদনা)'
+                            : editingItem
+                            ? `নতুন ওষুধ #${toBnNumber(index + 1)} (এই দিনে যোগ হবে)`
+                            : `ওষুধ #${toBnNumber(index + 1)}`}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Time of Day selection */}
-                        <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px] font-bold">
-                          {(['সকাল', 'দুপুর', 'রাত', 'পানির সাথে'] as const).map((t) => (
-                            <button
-                              key={t}
-                              type="button"
-                              onClick={() => {
-                                handleUpdateRowField(row.id, 'timeOfDay', t);
-                                if (!row.timingAndDosage.includes(t)) {
-                                  handleUpdateRowField(row.id, 'timingAndDosage', `${t}ে ১ লিটার পানিতে ১ মিলি`);
-                                }
-                              }}
-                              className={`px-2 py-0.5 rounded-md transition-colors ${
-                                row.timeOfDay === t
-                                  ? 'bg-white text-emerald-700 shadow-2xs'
-                                  : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                            >
-                              {t}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Remove Row Button */}
-                        {!editingItem && sheetRows.length > 1 && (
+                        {/* Remove Row Button for extra rows */}
+                        {sheetRows.length > 1 && !row.isExisting && (
                           <button
                             type="button"
                             onClick={() => handleRemoveRow(row.id)}
-                            className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                            className="flex items-center gap-1 px-2 py-1 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-bold transition-colors border border-rose-200/60"
                             title="এই ওষুধটি শীট থেকে বাদ দিন"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
+                            <span>মুছুন</span>
                           </button>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Dose Timing Buttons (Multi-Dose options) */}
+                    <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between flex-wrap gap-1">
+                        <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                          <Clock3 className="w-3.5 h-3.5 text-blue-600" />
+                          খাওয়ানোর সময় বা প্রয়োগকাল (Dose Timing) *
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          বর্তমানে নির্বাচিত: <strong className="text-emerald-700">{row.timeOfDay || 'সকাল ও রাতে'}</strong>
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {MEDICINE_TIMING_OPTIONS.map((opt) => {
+                          const isSelected =
+                            row.timeOfDay === opt.id ||
+                            (row.timeOfDay === 'সকাল' && opt.id === 'সকালে') ||
+                            (row.timeOfDay === 'দুপুর' && opt.id === 'দুপুরে') ||
+                            (row.timeOfDay === 'রাত' && opt.id === 'রাতে');
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => {
+                                handleUpdateRowField(row.id, 'timeOfDay', opt.id);
+                                // If timing dosage is empty or matches another default, fill in standard recommendation
+                                if (
+                                  !row.timingAndDosage.trim() ||
+                                  MEDICINE_TIMING_OPTIONS.some((o) => row.timingAndDosage === o.defaultDosageNote)
+                                ) {
+                                  handleUpdateRowField(row.id, 'timingAndDosage', opt.defaultDosageNote);
+                                }
+                              }}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                                isSelected
+                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs scale-102 ring-2 ring-emerald-500/20'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40'
+                              }`}
+                            >
+                              <span>{opt.label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -1283,7 +1472,7 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                         <input
                           type="text"
                           required
-                          placeholder="যেমন: ভিটামিন বি-কমপ্লেক্স বা সিপ্রোসিন"
+                          placeholder="যেমন: ডক্সিসাইক্লিন, সিপ্রোসিন বা ক্যালসিয়াম"
                           value={row.medicineName}
                           onChange={(e) => handleUpdateRowField(row.id, 'medicineName', e.target.value)}
                           className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -1307,6 +1496,25 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                           <option value="কৃমিনাশক">কৃমিনাশক</option>
                           <option value="অন্যান্য ওষুধ">অন্যান্য ওষুধ</option>
                         </select>
+                      </div>
+                    </div>
+
+                    {/* Quick Symptom Tags */}
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-500 block mb-1">
+                        দ্রুত রোগ বা লক্ষণ নির্বাচন করুন (ক্লিক করলে ঘরে বসে যাবে):
+                      </span>
+                      <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto scrollbar-thin">
+                        {QUICK_SYMPTOMS.map((sym) => (
+                          <button
+                            key={sym}
+                            type="button"
+                            onClick={() => handleUpdateRowField(row.id, 'symptoms', sym)}
+                            className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-[10px] font-semibold text-slate-600 transition-colors"
+                          >
+                            + {sym}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
@@ -1335,7 +1543,7 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                         <input
                           type="text"
                           required
-                          placeholder="যেমন: সকালে ১ লিটার পানিতে ১ মিলি"
+                          placeholder="যেমন: সকালে ও রাতে খাবার পানির সাথে ১ লিটারে ১ মিলি"
                           value={row.timingAndDosage}
                           onChange={(e) => handleUpdateRowField(row.id, 'timingAndDosage', e.target.value)}
                           className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -1357,24 +1565,28 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                 ))}
               </div>
 
-              {/* Bottom Add Row shortcut */}
-              {!editingItem && (
-                <div className="text-center pt-1">
-                  <button
-                    type="button"
-                    onClick={handleAddRow}
-                    className="w-full py-2.5 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-all"
-                  >
-                    <Plus className="w-4 h-4 text-emerald-600" />
-                    + এই শীটে আরও একটি ওষুধ যোগ করুন (সকাল/দুপুর/রাত)
-                  </button>
-                </div>
-              )}
+              {/* Bottom Add Row button (available in both add and edit modes) */}
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={handleAddRow}
+                  className="w-full py-2.5 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  <Plus className="w-4 h-4 text-emerald-600" />
+                  {editingItem
+                    ? '+ এই দিনে আরেকটি নতুন ওষুধ যোগ করুন (যেমন: ভিটামিন/স্যালাইন/অ্যান্টিবায়োটিক)'
+                    : '+ এই শীটে আরও একটি ওষুধ যোগ করুন (সকাল/দুপুর/রাত)'}
+                </button>
+              </div>
 
               {/* Footer Actions */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
                 <span className="text-[11px] text-slate-500 font-medium">
-                  {editingItem ? '১টি এন্ট্রি আপডেট হবে' : `${toBnNumber(sheetRows.length)}টি ওষুধ × ${toBnNumber(courseDurationDays)} দিন = মোট ${toBnNumber(sheetRows.length * (parseInt(courseDurationDays, 10) || 1))}টি এন্ট্রি তৈরি হবে`}
+                  {editingItem
+                    ? sheetRows.filter((r) => r.medicineName.trim() !== '').length > 1
+                      ? `১টি ওষুধ আপডেট হবে এবং ${toBnNumber(sheetRows.filter((r) => r.medicineName.trim() !== '').length - 1)}টি নতুন ওষুধ যুক্ত হবে`
+                      : '১টি ওষুধ আপডেট হবে'
+                    : `${toBnNumber(sheetRows.length)}টি ওষুধ × ${toBnNumber(courseDurationDays)} দিন = মোট ${toBnNumber(sheetRows.length * (parseInt(courseDurationDays, 10) || 1))}টি এন্ট্রি তৈরি হবে`}
                 </span>
 
                 <div className="flex items-center gap-2">
@@ -1390,7 +1602,11 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                     className="px-6 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 flex items-center gap-1.5"
                   >
                     <Check className="w-4 h-4" />
-                    {editingItem ? 'আপডেট সম্পন্ন করুন' : 'একসাথে সব ওষুধ সংরক্ষণ করুন'}
+                    {editingItem
+                      ? sheetRows.filter((r) => r.medicineName.trim() !== '').length > 1
+                        ? 'আপডেট ও নতুন ওষুধ সংরক্ষণ করুন'
+                        : 'আপডেট সংরক্ষণ করুন'
+                      : 'একসাথে সব ওষুধ সংরক্ষণ করুন'}
                   </button>
                 </div>
               </div>

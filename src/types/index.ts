@@ -74,7 +74,20 @@ export interface MedicineScheduleItem {
   purpose?: string; // উদ্দেশ্য (compatibility)
   dosage?: string; // মাত্রা (compatibility)
   medicineType?: 'টিকা (ভ্যাকসিন)' | 'অ্যান্টিবায়োটিক' | 'ভিটামিন / মিনারেল' | 'স্যালাইন / গ্লুকোজ' | 'কৃমিনাশক' | 'অন্যান্য ওষুধ';
-  timeOfDay?: 'সকাল' | 'দুপুর' | 'রাত' | 'সারাদিন' | 'পানির সাথে';
+  timeOfDay?:
+    | 'সকাল ও রাতে'
+    | 'দুপুর ও রাতে'
+    | 'সকাল'
+    | 'সকালে'
+    | 'দুপুর'
+    | 'দুপুরে'
+    | 'রাত'
+    | 'রাতে'
+    | 'সকাল, দুপুর ও রাত'
+    | 'সারাদিন'
+    | 'সারাদিন পানিতে'
+    | 'পানির সাথে'
+    | string;
   status: 'pending' | 'completed';
   completedAt?: string;
   notes?: string;
