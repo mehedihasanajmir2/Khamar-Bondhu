@@ -188,15 +188,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 </div>
 
-                {/* Switch to demo button for testing */}
+                {/* Switch to demo button */}
                 <button
                   type="button"
                   onClick={switchToDemo}
-                  className="hidden xl:flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-                  title="ডেমো খামার দেখুন"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl text-slate-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors shadow-2xs"
+                  title="ডেমো খামারের হিসাব দেখতে ক্লিক করুন"
                 >
-                  <Repeat className="w-3 h-3 text-slate-500" />
-                  <span>ডেমো দেখুন</span>
+                  <Repeat className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="hidden sm:inline">ডেমো খামার দেখুন</span>
+                  <span className="sm:hidden">ডেমো</span>
                 </button>
 
                 {/* New Batch button */}

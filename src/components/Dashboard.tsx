@@ -30,6 +30,7 @@ interface DashboardProps {
   recentSales: SaleRecord[];
   onToggleMedicine: (medId: string) => void;
   onRequestArchiveBatch?: (batchId: string) => void;
+  onImportDemoData?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -43,7 +44,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   recentExpenses,
   recentSales,
   onToggleMedicine,
-  onRequestArchiveBatch
+  onRequestArchiveBatch,
+  onImportDemoData
 }) => {
   if (!activeBatch || !summary) {
     return (
@@ -60,15 +62,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
               স্বাগতম! আপনার ডিজিটাল খামার ড্যাশবোর্ড সম্পূর্ণ প্রস্তুত
             </h2>
             <p className="text-emerald-100 text-sm sm:text-base leading-relaxed mb-6">
-              আপনার খামারে বর্তমানে কোনো সক্রিয় ব্যাচ নেই (সম্পূর্ণ পরিষ্কার / Blank)। আপনার প্রথম ব্যাচ তৈরি করে বাচ্চার ওজন, খাদ্য, টিকা এবং লাভ-ক্ষতির নিখুঁত হিসাব সংরক্ষণ শুরু করুন।
+              আপনার খামারে বর্তমানে কোনো সক্রিয় ব্যাচ তৈরি করা নেই। আপনি সম্পূর্ণ নতুন নিজস্ব ব্যাচ শুরু করতে পারেন, অথবা পূর্বের প্রদর্শিত সম্পূর্ণ নমুনা ব্যাচ ও হিসাব আপনার অ্যাকাউন্টে কপি করে নিজের মতো পরিবর্তন করতে পারেন।
             </p>
-            <button
-              onClick={onOpenNewBatch}
-              className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-white hover:bg-emerald-50 text-emerald-900 font-extrabold shadow-lg shadow-black/10 transition-all hover:scale-105 active:scale-95 text-sm sm:text-base"
-            >
-              <PlusCircle className="w-5 h-5 text-emerald-700" />
-              <span>আপনার প্রথম ব্যাচ শুরু করুন</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={onOpenNewBatch}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white hover:bg-emerald-50 text-emerald-900 font-extrabold shadow-lg shadow-black/10 transition-all hover:scale-105 active:scale-95 text-sm"
+              >
+                <PlusCircle className="w-5 h-5 text-emerald-700" />
+                <span>+ নতুন নিজস্ব ব্যাচ শুরু করুন</span>
+              </button>
+              {onImportDemoData && (
+                <button
+                  onClick={onImportDemoData}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-emerald-500/30 hover:bg-emerald-500/40 text-white border border-white/30 font-bold backdrop-blur-xs shadow-md transition-all hover:scale-105 active:scale-95 text-sm"
+                  title="পূর্বের ডেমো খামারের সকল হিসাব ও ব্যাচ আপনার একাউন্টে লোড করুন"
+                >
+                  <span>📥 পূর্বের সম্পূর্ণ ডাটা ও ব্যাচ লোড করুন</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

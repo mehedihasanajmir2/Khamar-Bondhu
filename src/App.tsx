@@ -40,6 +40,7 @@ const MainApp: React.FC = () => {
     isLoading,
     isGuest,
     syncVersion,
+    notifyDataChanged,
     isAuthModalOpen,
     setIsAuthModalOpen,
     openAuthModalWithReason
@@ -466,6 +467,25 @@ const MainApp: React.FC = () => {
     showToast('বিক্রির রেকর্ড মুছে ফেলা হয়েছে');
   };
 
+  const handleImportDemoData = async () => {
+    if (!currentUser) return;
+    await PoultryStorageService.importDemoDataToUser(currentUser.uid);
+    await PoultryStorageService.syncUserFromFirestore(currentUser.uid);
+    const updatedBatches = PoultryStorageService.getBatches(currentUser.uid);
+    setBatches(updatedBatches);
+    if (updatedBatches.length > 0) {
+      const first = updatedBatches[0];
+      setActiveBatchId(first.id);
+      setGrowthRecords(PoultryStorageService.getGrowthRecords(currentUser.uid, first.id));
+      setMedicines(PoultryStorageService.getMedicineSchedule(currentUser.uid, first.id));
+      setExpenses(PoultryStorageService.getExpenses(currentUser.uid, first.id));
+      setSales(PoultryStorageService.getSales(currentUser.uid, first.id));
+      setSummary(PoultryStorageService.calculateBatchSummary(currentUser.uid, first));
+    }
+    notifyDataChanged();
+    showToast('পূর্বের সম্পূর্ণ ব্যাচ ও হিসাব সফলভাবে লোড হয়েছে!');
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -548,6 +568,7 @@ const MainApp: React.FC = () => {
             recentSales={sales}
             onToggleMedicine={handleToggleMedicine}
             onRequestArchiveBatch={handleRequestArchive}
+            onImportDemoData={handleImportDemoData}
           />
         )}
 

@@ -266,6 +266,82 @@ export class PoultryStorageService {
     return JSON.stringify(data, null, 2);
   }
 
+  /**
+   * Imports all batches, growth records, medicines, expenses, and sales
+   * from the standard demo profile into the target user account, and syncs to Firestore.
+   */
+  static async importDemoDataToUser(targetUserId: string): Promise<boolean> {
+    if (!targetUserId) return false;
+    const demoUid = DEMO_PROFILES[0].uid;
+    let demoBatches = this.getBatches(demoUid);
+    if (demoBatches.length === 0) {
+      this.seedInitialDemoData();
+      demoBatches = this.getBatches(demoUid);
+    }
+
+    for (const b of demoBatches) {
+      const cleanId = targetUserId.replace(/[^a-zA-Z0-9]/g, '_');
+      const newBatchId = `batch_${cleanId}_${b.id}`;
+      const clonedBatch: Batch = {
+        ...b,
+        id: newBatchId,
+        userId: targetUserId,
+        createdAt: new Date().toISOString()
+      };
+      this.saveBatch(targetUserId, clonedBatch);
+
+      // Clone growth
+      const growth = this.getGrowthRecords(demoUid, b.id);
+      for (const g of growth) {
+        this.saveGrowthRecord(targetUserId, {
+          ...g,
+          id: `g_${cleanId}_${g.id}`,
+          batchId: newBatchId,
+          userId: targetUserId
+        });
+      }
+
+      // Clone medicines
+      const meds = this.getMedicineSchedule(demoUid, b.id);
+      this.saveMedicineSchedule(
+        targetUserId,
+        newBatchId,
+        meds.map((m) => ({
+          ...m,
+          id: `med_${cleanId}_${m.id}`,
+          batchId: newBatchId,
+          userId: targetUserId
+        }))
+      );
+
+      // Clone expenses
+      const expenses = this.getExpenses(demoUid, b.id);
+      for (const e of expenses) {
+        this.saveExpense(targetUserId, {
+          ...e,
+          id: `exp_${cleanId}_${e.id}`,
+          batchId: newBatchId,
+          userId: targetUserId
+        });
+      }
+
+      // Clone sales
+      const sales = this.getSales(demoUid, b.id);
+      for (const s of sales) {
+        this.saveSale(targetUserId, {
+          ...s,
+          id: `sale_${cleanId}_${s.id}`,
+          batchId: newBatchId,
+          userId: targetUserId
+        });
+      }
+    }
+
+    // Push all newly imported records to Cloud Firestore
+    await this.pushAllToFirestore(targetUserId);
+    return true;
+  }
+
   // --- User Profiles & Auth ---
   static getUsers(): UserProfile[] {
     const raw = localStorage.getItem(USERS_KEY);
