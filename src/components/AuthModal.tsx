@@ -101,11 +101,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         </button>
 
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-3">
-            <span className="text-2xl">🐓</span>
+          <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-lg shadow-emerald-600/20 ring-2 ring-emerald-200 mx-auto mb-3 bg-emerald-700">
+            <img
+              src="/assets/aistudio/Gemini_Generated_Image_gm2r1igm2r1igm2r_1d927ad2.jpg"
+              alt="FarmHisab Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
           <h2 className="text-xl font-black text-slate-900">
-            {isRegister ? 'নতুন খামারী একাউন্ট নিবন্ধন' : 'খামার বন্ধু একাউন্টে লগইন'}
+            {isRegister ? 'FarmHisab (ফার্মহিসাব) নতুন একাউন্ট' : 'FarmHisab (ফার্মহিসাব) এ লগইন'}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             ফায়ারবেস কনসোল অথেনটিকেশন ও ক্লাউড ফায়ারস্টোর সংযুক্ত

@@ -58,13 +58,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           
           {/* Logo & Farm Branding */}
           <div className="flex items-center space-x-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md shadow-emerald-600/20 ring-2 ring-emerald-200">
-              <span className="text-2xl" role="img" aria-label="poultry">🐓</span>
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl overflow-hidden shadow-md shadow-emerald-600/20 ring-2 ring-emerald-200 bg-emerald-700 shrink-0">
+              <img
+                src="/assets/aistudio/Gemini_Generated_Image_gm2r1igm2r1igm2r_1d927ad2.jpg"
+                alt="FarmHisab Logo"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-                  খামার<span className="text-emerald-600">বন্ধু</span>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
+                  Farm<span className="text-emerald-600">Hisab</span>
+                </span>
+                <span className="text-xs sm:text-sm font-bold text-slate-500">
+                  (ফার্মহিসাব)
                 </span>
                 {isGuest ? (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">

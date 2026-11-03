@@ -129,8 +129,12 @@ export const ReportView: React.FC<ReportViewProps> = ({
         
         {/* Farm & Report Header */}
         <div className="border-b-2 border-slate-900 pb-5 mb-6 text-center">
-          <div className="inline-flex items-center justify-center gap-2 mb-1">
-            <span className="text-2xl">🐓</span>
+          <div className="inline-flex items-center justify-center gap-2.5 mb-1">
+            <img
+              src="/assets/aistudio/Gemini_Generated_Image_gm2r1igm2r1igm2r_1d927ad2.jpg"
+              alt="FarmHisab Logo"
+              className="w-8 h-8 rounded-full object-cover border border-amber-400 shadow-sm"
+            />
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
               {currentUser?.farmName || 'পোল্ট্রি খামার'}
             </h1>
@@ -332,8 +336,8 @@ export const ReportView: React.FC<ReportViewProps> = ({
         {/* Signature & Verification Footer */}
         <div className="mt-12 pt-8 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
           <div>
-            <p className="font-bold text-slate-800">খামার বন্ধু সফটওয়্যার সিস্টেম</p>
-            <p className="text-[10px]">Row-Level Security Scoped • Tenant: {currentUser?.uid}</p>
+            <p className="font-bold text-slate-800">FarmHisab (ফার্মহিসাব) সফটওয়্যার সিস্টেম</p>
+            <p className="text-[10px]">Cloud Firestore Synchronized • Farmer ID: {currentUser?.uid}</p>
           </div>
           <div className="text-right">
             <div className="w-40 border-b border-slate-400 mb-1"></div>

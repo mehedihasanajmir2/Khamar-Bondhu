@@ -10,7 +10,7 @@ import {
 } from '../types';
 import { calculateBatchAgeDays, simpleHash } from '../utils/formatters';
 import { generateInitialSchedule } from '../data/medicineTemplates';
-import { doc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, getDocs, getDoc, collection } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 
 // Storage keys partitioned by user for strict Row-Level Isolation
@@ -77,15 +77,9 @@ export class PoultryStorageService {
   // --- Background Cloud Firestore Sync Helpers ---
   private static async syncFirestoreDoc(path: string, data: any): Promise<void> {
     try {
-      if (auth.currentUser) {
-        const segments = path.split('/');
-        const pathUserId = segments[1];
-        if (auth.currentUser.uid === pathUserId) {
-          const docRef = doc(db, path);
-          const sanitized = cleanForFirestore(data);
-          await setDoc(docRef, sanitized, { merge: true });
-        }
-      }
+      const docRef = doc(db, path);
+      const sanitized = cleanForFirestore(data);
+      await setDoc(docRef, sanitized, { merge: true });
     } catch (error) {
       console.warn(`Firestore sync warning for ${path}:`, error);
     }
@@ -93,14 +87,8 @@ export class PoultryStorageService {
 
   private static async deleteFirestoreDoc(path: string): Promise<void> {
     try {
-      if (auth.currentUser) {
-        const segments = path.split('/');
-        const pathUserId = segments[1];
-        if (auth.currentUser.uid === pathUserId) {
-          const docRef = doc(db, path);
-          await deleteDoc(docRef);
-        }
-      }
+      const docRef = doc(db, path);
+      await deleteDoc(docRef);
     } catch (error) {
       console.warn(`Firestore delete warning for ${path}:`, error);
     }
@@ -108,14 +96,22 @@ export class PoultryStorageService {
 
   /**
    * Pulls all batches and child collections from Cloud Firestore into local storage
-   * and merges two-way with local storage so no data is ever lost.
+   * and merges two-way with local storage so no data is ever lost across devices.
    */
   static async syncUserFromFirestore(userId: string): Promise<boolean> {
     if (!userId) return false;
-    if (auth.currentUser && auth.currentUser.uid !== userId) {
-      return false;
-    }
     try {
+      // Sync user profile if exists in Firestore
+      try {
+        const uDoc = await getDoc(doc(db, 'users', userId));
+        if (uDoc.exists()) {
+          const profile = uDoc.data() as UserProfile;
+          this.saveUser(profile);
+        }
+      } catch (e) {
+        console.warn('Sync profile error:', e);
+      }
+
       const batchesRef = collection(db, 'users', userId, 'batches');
       const batchSnaps = await getDocs(batchesRef);
       const localBatches = this.getBatches(userId);
@@ -217,7 +213,7 @@ export class PoultryStorageService {
    * Pushes all local batches and subcollections to Cloud Firestore
    */
   static async pushAllToFirestore(userId: string): Promise<boolean> {
-    if (!userId || !auth.currentUser || auth.currentUser.uid !== userId) return false;
+    if (!userId) return false;
     try {
       const batches = this.getBatches(userId);
       for (const b of batches) {
@@ -315,6 +311,34 @@ export class PoultryStorageService {
     );
   }
 
+  static isEmailOrPhoneTaken(emailOrIdentifier: string, phone?: string): boolean {
+    const users = this.getUsers();
+    const cleanId = emailOrIdentifier.trim().toLowerCase();
+    const idDigits = cleanId.replace(/[^0-9]/g, '');
+    const cleanPhoneDigits = (phone || '').replace(/[^0-9]/g, '');
+
+    return users.some((u) => {
+      // 1. Direct email match
+      if (u.email && u.email.toLowerCase() === cleanId) return true;
+      
+      // 2. Direct phone match
+      if (u.phone) {
+        const uPhoneDigits = u.phone.replace(/[^0-9]/g, '');
+        if (idDigits && idDigits.length >= 8 && uPhoneDigits.endsWith(idDigits)) return true;
+        if (cleanPhoneDigits && cleanPhoneDigits.length >= 8 && uPhoneDigits.endsWith(cleanPhoneDigits)) return true;
+      }
+
+      // 3. Email alias for phone (e.g. 017... @khamar.app)
+      if (u.email.includes('@khamar.app')) {
+        const uEmailDigits = u.email.split('@')[0].replace(/[^0-9]/g, '');
+        if (idDigits && idDigits.length >= 8 && uEmailDigits === idDigits) return true;
+        if (cleanPhoneDigits && cleanPhoneDigits.length >= 8 && uEmailDigits === cleanPhoneDigits) return true;
+      }
+
+      return false;
+    });
+  }
+
   static saveUser(user: UserProfile): void {
     const users = this.getUsers();
     const idx = users.findIndex((u) => u.uid === user.uid);
@@ -324,6 +348,16 @@ export class PoultryStorageService {
       users.push(user);
     }
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+    // Also persist to Cloud Firestore asynchronously for cross-device availability
+    try {
+      const sanitized = cleanForFirestore(user);
+      setDoc(doc(db, 'users', user.uid), sanitized, { merge: true }).catch((e) =>
+        console.warn('Sync user to firestore warning:', e)
+      );
+    } catch (e) {
+      console.warn('Sync user error:', e);
+    }
   }
 
   static getActiveUserId(): string | null {

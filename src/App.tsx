@@ -471,7 +471,7 @@ const MainApp: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm font-bold text-slate-700">খামার বন্ধু লোড হচ্ছে...</p>
+          <p className="text-sm font-bold text-slate-700">FarmHisab (ফার্মহিসাব) লোড হচ্ছে...</p>
         </div>
       </div>
     );
