@@ -23,6 +23,7 @@ export interface UserProfile {
   birdType?: BirdType;
   registrationDate: string;
   passwordHash?: string;
+  role?: 'admin' | 'farmer';
 }
 
 export interface Batch {

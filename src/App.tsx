@@ -9,6 +9,7 @@ import { SalesLog } from './components/SalesLog';
 import { ReportView } from './components/ReportView';
 import { UserProfile } from './components/UserProfile';
 import { AIAssistant } from './components/AIAssistant';
+import { UsersDirectory } from './components/UsersDirectory';
 import { NewBatchModal } from './components/NewBatchModal';
 import { AuthModal } from './components/AuthModal';
 import { ArchiveBatchModal } from './components/ArchiveBatchModal';
@@ -639,6 +640,16 @@ const MainApp: React.FC = () => {
             activeBatch={activeBatch}
             batches={batches}
             onSelectBatch={handleSelectBatch}
+          />
+        )}
+
+        {activeTab === 'users_directory' && (
+          <UsersDirectory
+            currentUser={currentUser}
+            isAdmin={Boolean(currentUser?.email && currentUser.email.toLowerCase() === 'mehedihasanajmir2@gmail.com') || currentUser?.role === 'admin'}
+            onOpenAuthModal={() =>
+              openAuthModalWithReason('অ্যাডমিন ডিরেক্টরি দেখতে অনুগ্রহ করে আপনার অ্যাডমিন একাউন্ট mehedihasanajmir2@gmail.com দিয়ে লগইন করুন।')
+            }
           />
         )}
 

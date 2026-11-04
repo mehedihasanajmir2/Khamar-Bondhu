@@ -1,20 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Farmer Profiles & Data - Scoped by userId
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Bootstrapped Admin for mehedihasanajmir2@gmail.com
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'mehedihasanajmir2@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Farmer Profiles & Data - Strict PII Protection
     match /users/{userId} {
-      allow read, write: if true;
+      // Only the Admin can view the list of all users/farmers
+      allow list: if isAdmin();
+      
+      // An individual user can only view or edit their own profile, or admin can access
+      allow get: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
 
       // Batches Subcollection
       match /batches/{batchId} {
-        allow read, write: if true;
+        allow read, write: if isOwner(userId) || isAdmin();
 
         // Subcollections: growth, medicines, expenses, sales
         match /{subcollection}/{docId} {
-          allow read, write: if true;
+          allow read, write: if isOwner(userId) || isAdmin();
         }
       }
+    }
+
+    // Admins metadata collection
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // Default deny for anything else

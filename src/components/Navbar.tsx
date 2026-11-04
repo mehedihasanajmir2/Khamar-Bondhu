@@ -11,7 +11,8 @@ import {
   LogOut,
   Repeat,
   PlusCircle,
-  Bot
+  Bot,
+  Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatTaka, toBnNumber } from '../utils/formatters';
@@ -24,6 +25,7 @@ export type TabType =
   | 'sales'
   | 'reports'
   | 'assistant'
+  | 'users_directory'
   | 'profile';
 
 interface NavbarProps {
@@ -43,6 +45,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { currentUser, logout, switchUser, switchToDemo, allDemoUsers, isGuest } = useAuth();
 
+  const ADMIN_EMAIL = 'mehedihasanajmir2@gmail.com';
+  const isAdmin =
+    Boolean(currentUser?.email && currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) ||
+    currentUser?.role === 'admin';
+
   const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'ড্যাশবোর্ড', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'batch', label: 'ব্যাচ ও বৃদ্ধি', icon: <Layers className="w-5 h-5" /> },
@@ -51,6 +58,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'sales', label: 'বিক্রি ও আয়', icon: <TrendingUp className="w-5 h-5" /> },
     { id: 'reports', label: 'হিসাব বিবরণী', icon: <FileSpreadsheet className="w-5 h-5" /> },
     { id: 'assistant', label: 'AI সহকারী', icon: <Bot className="w-5 h-5" /> },
+    ...(isAdmin
+      ? [{ id: 'users_directory' as TabType, label: 'খামারী ও SMS (অ্যাডমিন)', icon: <Users className="w-5 h-5" /> }]
+      : []),
     { id: 'profile', label: 'প্রোফাইল', icon: <UserCheck className="w-5 h-5" /> },
   ];
 
