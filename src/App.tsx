@@ -8,6 +8,7 @@ import { ExpenseLog } from './components/ExpenseLog';
 import { SalesLog } from './components/SalesLog';
 import { ReportView } from './components/ReportView';
 import { UserProfile } from './components/UserProfile';
+import { AIAssistant } from './components/AIAssistant';
 import { NewBatchModal } from './components/NewBatchModal';
 import { AuthModal } from './components/AuthModal';
 import { ArchiveBatchModal } from './components/ArchiveBatchModal';
@@ -29,7 +30,9 @@ import {
   TrendingUp,
   FileSpreadsheet,
   UserCheck,
-  ShieldAlert
+  ShieldAlert,
+  Bot,
+  Sparkles
 } from 'lucide-react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -630,6 +633,15 @@ const MainApp: React.FC = () => {
           />
         )}
 
+        {activeTab === 'assistant' && (
+          <AIAssistant
+            currentUser={currentUser}
+            activeBatch={activeBatch}
+            batches={batches}
+            onSelectBatch={handleSelectBatch}
+          />
+        )}
+
         {activeTab === 'profile' && (
           <UserProfile
             batches={batches}
@@ -642,8 +654,26 @@ const MainApp: React.FC = () => {
         )}
       </main>
 
+      {/* Floating AI Quick-Assistant Action Button (FAB) */}
+      {activeTab !== 'assistant' && (
+        <button
+          onClick={() => setActiveTab('assistant')}
+          className="fixed bottom-16 right-4 sm:bottom-6 sm:right-6 z-40 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white p-3.5 sm:px-5 sm:py-3.5 rounded-full shadow-xl shadow-emerald-700/30 border border-emerald-400/40 flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95 group"
+          title="খামার বন্ধু AI সহকারীকে প্রশ্ন করুন"
+        >
+          <div className="relative">
+            <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping"></span>
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full"></span>
+          </div>
+          <span className="text-xs sm:text-sm font-black hidden sm:inline tracking-wide">
+            AI সহকারী
+          </span>
+        </button>
+      )}
+
       {/* Mobile Bottom Navigation Bar - Ultra Ergonomic & Touch-Friendly */}
-      <nav aria-label="মোবাইল মেনু" className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 px-2 py-1.5 flex justify-around shadow-lg">
+      <nav aria-label="মোবাইল মেনু" className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 px-1 py-1 flex justify-around shadow-lg">
         <button
           type="button"
           onClick={() => setActiveTab('dashboard')}
@@ -667,7 +697,7 @@ const MainApp: React.FC = () => {
           }`}
         >
           <Layers className="w-4 h-4 mb-0.5" />
-          <span>ব্যাচ ও ওজন</span>
+          <span>ব্যাচ</span>
         </button>
 
         <button
@@ -680,7 +710,20 @@ const MainApp: React.FC = () => {
           }`}
         >
           <Syringe className="w-4 h-4 mb-0.5" />
-          <span>ওষুধ ও টিকা</span>
+          <span>ওষুধ</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('assistant')}
+          className={`flex flex-col items-center justify-center p-1 rounded-xl text-[10px] font-bold transition-all ${
+            activeTab === 'assistant'
+              ? 'text-emerald-700 bg-emerald-50 scale-105 font-black'
+              : 'text-emerald-600 hover:text-emerald-800'
+          }`}
+        >
+          <Bot className="w-4 h-4 mb-0.5 text-emerald-600 animate-pulse" />
+          <span>AI সহকারী</span>
         </button>
 
         <button
@@ -693,7 +736,7 @@ const MainApp: React.FC = () => {
           }`}
         >
           <Receipt className="w-4 h-4 mb-0.5" />
-          <span>খরচের খাতা</span>
+          <span>খরচ</span>
         </button>
 
         <button
@@ -706,7 +749,7 @@ const MainApp: React.FC = () => {
           }`}
         >
           <TrendingUp className="w-4 h-4 mb-0.5" />
-          <span>বিক্রির খাতা</span>
+          <span>বিক্রি</span>
         </button>
 
         <button

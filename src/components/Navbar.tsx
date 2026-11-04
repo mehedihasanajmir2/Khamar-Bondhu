@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   LogOut,
   Repeat,
-  PlusCircle
+  PlusCircle,
+  Bot
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatTaka, toBnNumber } from '../utils/formatters';
@@ -22,6 +23,7 @@ export type TabType =
   | 'expenses'
   | 'sales'
   | 'reports'
+  | 'assistant'
   | 'profile';
 
 interface NavbarProps {
@@ -48,6 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'expenses', label: 'খরচ হিসাব', icon: <Receipt className="w-5 h-5" /> },
     { id: 'sales', label: 'বিক্রি ও আয়', icon: <TrendingUp className="w-5 h-5" /> },
     { id: 'reports', label: 'হিসাব বিবরণী', icon: <FileSpreadsheet className="w-5 h-5" /> },
+    { id: 'assistant', label: 'AI সহকারী', icon: <Bot className="w-5 h-5" /> },
     { id: 'profile', label: 'প্রোফাইল', icon: <UserCheck className="w-5 h-5" /> },
   ];
 

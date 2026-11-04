@@ -29,7 +29,9 @@ import {
   Download,
   RefreshCw,
   Database,
-  CheckCircle2
+  CheckCircle2,
+  MessageCircle,
+  Mail
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Batch, BirdType, UserProfile as UserProfileType } from '../types';
@@ -64,10 +66,30 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const [name, setName] = useState(currentUser?.name || '');
   const [farmName, setFarmName] = useState(currentUser?.farmName || '');
   const [phone, setPhone] = useState(currentUser?.phone || '');
+  const [whatsapp, setWhatsapp] = useState(currentUser?.whatsapp || currentUser?.phone || '');
+  const [personalEmail, setPersonalEmail] = useState(
+    currentUser?.email && !currentUser.email.includes('@khamar.app') ? currentUser.email : ''
+  );
   const [location, setLocation] = useState(currentUser?.location || '');
   const [capacity, setCapacity] = useState<string>(currentUser?.capacity?.toString() || '1000');
   const [birdType, setBirdType] = useState<BirdType>(currentUser?.birdType || 'ব্রয়লার');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Sync state if currentUser changes
+  React.useEffect(() => {
+    if (currentUser) {
+      setName(currentUser.name || '');
+      setFarmName(currentUser.farmName || '');
+      setPhone(currentUser.phone || '');
+      setWhatsapp(currentUser.whatsapp || currentUser.phone || '');
+      setPersonalEmail(
+        currentUser.email && !currentUser.email.includes('@khamar.app') ? currentUser.email : ''
+      );
+      setLocation(currentUser.location || '');
+      setCapacity(currentUser.capacity?.toString() || '1000');
+      setBirdType(currentUser.birdType || 'ব্রয়লার');
+    }
+  }, [currentUser]);
 
   // Archive Browser State
   const [searchTerm, setSearchTerm] = useState('');
@@ -134,10 +156,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPhone = phone.trim();
+    const cleanWhatsapp = whatsapp.trim() || cleanPhone;
+    const cleanEmail = personalEmail.trim() ? personalEmail.trim() : currentUser.email;
+
     updateProfile({
       name: name.trim(),
       farmName: farmName.trim(),
-      phone: phone.trim(),
+      phone: cleanPhone,
+      whatsapp: cleanWhatsapp,
+      email: cleanEmail,
       location: location.trim(),
       capacity: parseInt(capacity, 10) || 1000,
       birdType
@@ -167,7 +195,23 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </span>
               </div>
               <p className="text-sm font-semibold text-slate-600 mt-0.5">{currentUser.farmName}</p>
-              <p className="text-xs text-slate-400 mt-1">ইমেইল: {currentUser.email}</p>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  হোয়াটসঅ্যাপ: {currentUser.whatsapp || currentUser.phone}
+                </span>
+                {currentUser.email && !currentUser.email.includes('@khamar.app') ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
+                    <Mail className="w-3.5 h-3.5 text-blue-600" />
+                    ইমেইল: {currentUser.email}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">
+                    <Phone className="w-3 h-3 text-slate-400" />
+                    মোবাইল: {currentUser.phone}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -233,6 +277,36 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               <p className="font-bold text-slate-800 text-sm mt-1">{currentUser.phone}</p>
             </div>
 
+            <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/70">
+              <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1.5">
+                <MessageCircle className="w-4 h-4 text-emerald-600" /> হোয়াটসঅ্যাপ নম্বর (WhatsApp)
+              </span>
+              <p className="font-bold text-slate-900 text-sm mt-1 flex items-center justify-between">
+                <span>{currentUser.whatsapp || currentUser.phone}</span>
+                {currentUser.whatsapp && (
+                  <a
+                    href={`https://wa.me/${currentUser.whatsapp.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-emerald-700 hover:text-emerald-800 font-bold underline"
+                  >
+                    চ্যাট করুন ↗
+                  </a>
+                )}
+              </p>
+            </div>
+
+            <div className="bg-blue-50/60 p-4 rounded-2xl border border-blue-200/70">
+              <span className="text-xs text-blue-700 font-semibold flex items-center gap-1.5">
+                <Mail className="w-4 h-4 text-blue-600" /> ব্যক্তিগত ইমেইল (Real Email)
+              </span>
+              <p className="font-bold text-slate-900 text-sm mt-1 truncate">
+                {currentUser.email && !currentUser.email.includes('@khamar.app')
+                  ? currentUser.email
+                  : 'সংযুক্ত করা হয়নি (ঐচ্ছিক)'}
+              </p>
+            </div>
+
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70">
               <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
                 <MapPin className="w-4 h-4 text-rose-600" /> খামারের অবস্থান (জেলা/উপজেলা)
@@ -258,9 +332,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70">
               <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-indigo-600" /> ডাটা অ্যাক্সেস প্রিভিলেজ
+                <ShieldCheck className="w-4 h-4 text-indigo-600" /> ডাটা সিকিউরিটি ও ব্যাকআপ
               </span>
-              <p className="font-bold text-emerald-700 text-sm mt-1">পূর্ণ আইসোলেশন ও নিয়ন্ত্রণ</p>
+              <p className="font-bold text-emerald-700 text-sm mt-1">ক্লাউড ও লোকাল স্বয়ংক্রিয় সিঙ্ক</p>
             </div>
           </div>
         ) : (
@@ -299,6 +373,34 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600" /> হোয়াটসঅ্যাপ নম্বর (WhatsApp)
+                </label>
+                <input
+                  type="tel"
+                  placeholder="যেমন: 01712345678"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                />
+                <span className="text-[10px] text-slate-500 mt-0.5 block">খামারের যোগাযোগ ও সাপোর্টের জন্য</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <Mail className="w-3.5 h-3.5 text-blue-600" /> ব্যক্তিগত ইমেইল (Gmail বা নিজস্ব ইমেইল)
+                </label>
+                <input
+                  type="email"
+                  placeholder="যেমন: yourname@gmail.com"
+                  value={personalEmail}
+                  onChange={(e) => setPersonalEmail(e.target.value)}
+                  className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                />
+                <span className="text-[10px] text-slate-500 mt-0.5 block">জরুরি নোটিফিকেশন ও ক্লাউড ডাটা সুরক্ষায়</span>
               </div>
 
               <div>

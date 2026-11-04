@@ -17,6 +17,7 @@ export interface UserProfile {
   name: string;
   farmName: string;
   phone: string;
+  whatsapp?: string;
   location: string;
   capacity: number;
   birdType?: BirdType;
