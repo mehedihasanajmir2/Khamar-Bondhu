@@ -22,7 +22,12 @@ import {
   Sunrise,
   Sun,
   Moon,
-  Droplet
+  Droplet,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import { Batch, MedicineScheduleItem } from '../types';
 import { calculateBatchAgeDays, formatBnDate, toBnNumber } from '../utils/formatters';
@@ -278,6 +283,10 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
   // Edit scope option if editing an existing single item that belongs to a course
   const [editScope, setEditScope] = useState<'single' | 'allCourse'>('single');
 
+  // Dedicated Day Medicine View State (ক্লিক করলে ওই দিনের সব ওষুধ বিস্তারিত দেখা যাবে)
+  const [viewingDay, setViewingDay] = useState<number | null>(null);
+  const [copiedPrescription, setCopiedPrescription] = useState(false);
+
   if (!activeBatch) {
     return (
       <div className="py-12 text-center bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
@@ -296,6 +305,54 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
     medicines.forEach((m) => daysSet.add(m.dayAge));
     return Array.from(daysSet).sort((a, b) => a - b);
   }, [medicines]);
+
+  // Medicines for the currently selected day
+  const dayMedicines = useMemo(() => {
+    if (viewingDay === null) return [];
+    return medicines
+      .filter((m) => m.dayAge === viewingDay)
+      .sort((a, b) => {
+        const order: Record<string, number> = {
+          'সকালে': 1,
+          'সকাল': 1,
+          'সকাল ও রাতে': 2,
+          'দুপুরে': 3,
+          'দুপুর': 3,
+          'দুপুর ও রাতে': 4,
+          'রাতে': 5,
+          'রাত': 5,
+          'সকাল, দুপুর ও রাত': 6,
+          'সারাদিন পানিতে': 7,
+          'সারাদিন': 7,
+        };
+        const aVal = order[a.timeOfDay || ''] || 10;
+        const bVal = order[b.timeOfDay || ''] || 10;
+        return aVal - bVal;
+      });
+  }, [medicines, viewingDay]);
+
+  // Copy prescription for this day
+  const handleCopyDayPrescription = () => {
+    if (viewingDay === null || dayMedicines.length === 0) return;
+    const text = `🐔 খামার বন্ধু - ${activeBatch?.batchName || 'পোল্ট্রি খামার'}
+📅 বয়সের ${toBnNumber(viewingDay)}তম দিনের ওষুধের তালিকা:
+------------------------------------------
+${dayMedicines
+  .map(
+    (m, i) =>
+      `${toBnNumber(i + 1)}. ${m.medicineName} (${m.timeOfDay || 'নিয়ম অনুযায়ী'})
+   • রোগের লক্ষণ: ${m.symptoms || m.purpose || 'সাধারণ পরিচর্যা'}
+   • খাওয়ানোর নিয়ম: ${m.timingAndDosage || m.dosage || 'নির্দেশ অনুযায়ী'}
+   • স্ট্যাটাস: ${m.status === 'completed' ? '✓ সম্পন্ন' : '⏳ বাকি আছে'}`
+  )
+  .join('\n\n')}
+------------------------------------------
+মোট ওষুধ: ${toBnNumber(dayMedicines.length)} টি`;
+
+    navigator.clipboard.writeText(text);
+    setCopiedPrescription(true);
+    setTimeout(() => setCopiedPrescription(false), 2500);
+  };
 
   // Helper to render dose timing badge with icons and colors
   const renderTimingBadge = (timeOfDay?: string) => {
@@ -404,16 +461,30 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
 
   // Remove a row from the sheet
   const handleRemoveRow = (rowId: string) => {
-    if (sheetRows.length <= 1) return;
-    setSheetRows(sheetRows.filter((r) => r.id !== rowId));
+    setSheetRows((prevRows) => {
+      if (prevRows.length <= 1) return prevRows;
+      return prevRows.filter((r) => r.id !== rowId);
+    });
   };
 
-  // Update specific field in a row
+  // Update specific field in a row atomically with functional updater
   const handleUpdateRowField = (rowId: string, field: keyof MedicineSheetRow, value: any) => {
-    setSheetRows(
-      sheetRows.map((r) => {
+    setSheetRows((prevRows) =>
+      prevRows.map((r) => {
         if (r.id === rowId) {
           return { ...r, [field]: value };
+        }
+        return r;
+      })
+    );
+  };
+
+  // Update multiple fields in a row atomically
+  const handleUpdateRowMultiple = (rowId: string, updates: Partial<MedicineSheetRow>) => {
+    setSheetRows((prevRows) =>
+      prevRows.map((r) => {
+        if (r.id === rowId) {
+          return { ...r, ...updates };
         }
         return r;
       })
@@ -553,6 +624,7 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
     }
 
     setShowModal(false);
+    setViewingDay(startDay);
   };
 
   // Filter Items
@@ -592,8 +664,332 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Header Card */}
-      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* =========================================================================
+          DEDICATED DAY MEDICINE VIEW (ওই দিনের সব ওষুধ ও প্রেসক্রিপশন পাতা)
+          ========================================================================= */}
+      {viewingDay !== null ? (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          {/* Top Navigation Bar: Back button, Batch info, and Day Navigator */}
+          <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setViewingDay(null)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-bold transition-all active:scale-95 border border-slate-200 shadow-2xs"
+                title="সকল দিনের তালিকায় ফিরুন"
+              >
+                <ArrowLeft className="w-4 h-4 text-slate-600" />
+                <span>← সকল ওষুধের তালিকা</span>
+              </button>
+
+              <div className="hidden sm:block h-6 w-px bg-slate-200"></div>
+
+              <span className="text-xs font-semibold text-slate-500">
+                ব্যাচ: <strong className="text-slate-800">{activeBatch.batchName}</strong> ({activeBatch.birdType})
+              </span>
+            </div>
+
+            {/* Previous Day & Next Day Nav */}
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                disabled={viewingDay <= 1}
+                onClick={() => setViewingDay((prev) => (prev && prev > 1 ? prev - 1 : 1))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title="আগের দিনের ওষুধ দেখুন"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>{toBnNumber(Math.max(1, viewingDay - 1))}ম দিন</span>
+              </button>
+
+              <span className="px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white font-black text-xs sm:text-sm shadow-xs">
+                {toBnNumber(viewingDay)}তম দিন
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setViewingDay((prev) => (prev ? prev + 1 : 2))}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors"
+                title="পরের দিনের ওষুধ দেখুন"
+              >
+                <span>{toBnNumber(viewingDay + 1)}ম দিন</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Hero Banner for this Day */}
+          <div className="bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-lg border border-emerald-500/25 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex flex-col items-center justify-center font-black shadow-lg shadow-emerald-500/30 ring-4 ring-emerald-400/20 shrink-0">
+                  <span className="text-[10px] uppercase font-bold tracking-wider leading-none">দিন</span>
+                  <span className="text-xl sm:text-2xl mt-0.5">{toBnNumber(viewingDay)}</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                      বয়সের {toBnNumber(viewingDay)}তম দিনের ওষুধের তালিকা ও রুটিন
+                    </h2>
+                    {viewingDay === currentAge ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-400 text-emerald-950 animate-pulse">
+                        ⭐ আজকের দিন (বর্তমান বয়স)
+                      </span>
+                    ) : viewingDay < currentAge ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/20 text-slate-200">
+                        অতীত দিন ({toBnNumber(currentAge - viewingDay)} দিন আগে)
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30">
+                        আসন্ন দিন ({toBnNumber(viewingDay - currentAge)} দিন পর)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 max-w-2xl">
+                    এই দিনে সকাল, দুপুর ও রাতে কোন কোন ওষুধ খাওয়াতে হবে, রোগের লক্ষণ ও প্রয়োগকালের সম্পূর্ণ প্রেসক্রিপশন।
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons: Add Medicine on this day, Copy */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddModal(viewingDay, '1')}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ এই দিনে ওষুধ যোগ করুন</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyDayPrescription}
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-slate-200 text-xs font-bold border border-white/10 transition-colors"
+                  title="এই দিনের প্রেসক্রিপশন কপি করুন"
+                >
+                  {copiedPrescription ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-400" />
+                      <span className="text-emerald-300">কপি হয়েছে!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>কপি করুন</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick stats on banner */}
+            <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-3 gap-3 text-center">
+              <div className="bg-white/5 rounded-2xl p-2.5">
+                <span className="text-[10px] text-slate-300 block">মোট ওষুধ</span>
+                <span className="text-base sm:text-lg font-black text-white">{toBnNumber(dayMedicines.length)} টি</span>
+              </div>
+              <div className="bg-white/5 rounded-2xl p-2.5">
+                <span className="text-[10px] text-emerald-300 block">সম্পন্ন হয়েছে</span>
+                <span className="text-base sm:text-lg font-black text-emerald-400">
+                  {toBnNumber(dayMedicines.filter((m) => m.status === 'completed').length)} টি
+                </span>
+              </div>
+              <div className="bg-white/5 rounded-2xl p-2.5">
+                <span className="text-[10px] text-amber-300 block">এখনো বাকি আছে</span>
+                <span className="text-base sm:text-lg font-black text-amber-400">
+                  {toBnNumber(dayMedicines.filter((m) => m.status === 'pending').length)} টি
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* List of Medicines on This Day */}
+          {dayMedicines.length === 0 ? (
+            <div className="bg-white rounded-3xl p-8 sm:p-12 text-center border border-slate-200/80 shadow-xs space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                <Syringe className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-800">
+                  {toBnNumber(viewingDay)}তম দিনে কোনো ওষুধ নির্ধারিত নেই
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                  এই দিনে সকাল, দুপুর বা রাতে কোনো ওষুধ খাওয়াতে চাইলে নিচের বাটনে চাপ দিয়ে ওষুধ যুক্ত করুন।
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal(viewingDay, '1')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>+ {toBnNumber(viewingDay)}তম দিনে ওষুধ যোগ করুন</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-emerald-600" />
+                  এই দিনের নির্ধারিত ওষুধের তালিকা ({toBnNumber(dayMedicines.length)} টি)
+                </span>
+                <span className="text-[11px] text-slate-500 font-semibold">
+                  প্রয়োগ সম্পন্ন হলে স্ট্যাটাস বাটনে চাপ দিন
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3.5">
+                {dayMedicines.map((item, idx) => {
+                  const isDone = item.status === 'completed';
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 sm:p-5 rounded-3xl border transition-all shadow-xs relative ${
+                        isDone
+                          ? 'bg-emerald-50/40 border-emerald-200/80'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        {/* Left: Timing badge, name, symptoms, dosage */}
+                        <div className="space-y-2.5 flex-1 min-w-0">
+                          {/* Timing Badge & Serial */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="w-6 h-6 rounded-lg bg-slate-900 text-white font-black text-xs flex items-center justify-center shrink-0">
+                              {toBnNumber(idx + 1)}
+                            </span>
+
+                            {renderTimingBadge(item.timeOfDay)}
+
+                            {item.medicineType && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                {item.medicineType}
+                              </span>
+                            )}
+
+                            {item.courseDayIndex && item.totalCourseDays && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                কোর্সের {toBnNumber(item.courseDayIndex)}ম দিন (মোট {toBnNumber(item.totalCourseDays)} দিন)
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Medicine Name */}
+                          <h3 className={`text-base sm:text-lg font-black ${isDone ? 'text-emerald-950' : 'text-slate-900'}`}>
+                            {item.medicineName}
+                          </h3>
+
+                          {/* Two Key Fields: Symptoms and Timing & Dosage */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                            {/* Disease / Symptoms */}
+                            <div className="bg-rose-50/70 p-3 rounded-2xl border border-rose-100 space-y-0.5">
+                              <span className="text-[10px] font-bold text-rose-800 flex items-center gap-1 uppercase tracking-wider">
+                                <Activity className="w-3.5 h-3.5 text-rose-600" /> রোগের লক্ষণ / উদ্দেশ্য
+                              </span>
+                              <p className="text-xs font-bold text-slate-800 leading-snug">
+                                {item.symptoms || item.purpose || 'সাধারণ রোগ প্রতিরোধ ও সুস্থতা'}
+                              </p>
+                            </div>
+
+                            {/* Dosage & Timing */}
+                            <div className="bg-blue-50/70 p-3 rounded-2xl border border-blue-100 space-y-0.5">
+                              <span className="text-[10px] font-bold text-blue-800 flex items-center gap-1 uppercase tracking-wider">
+                                <Clock3 className="w-3.5 h-3.5 text-blue-600" /> খাওয়ানোর সময় ও মাত্রা (Dosage)
+                              </span>
+                              <p className="text-xs font-bold text-slate-800 leading-snug">
+                                {item.timingAndDosage || item.dosage || 'নির্দেশ অনুযায়ী পানির সাথে'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {item.notes && (
+                            <p className="text-[11px] text-slate-500 italic pt-0.5">
+                              বিশেষ নোট: {item.notes}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Right: Toggle Status, Edit, Delete */}
+                        <div className="flex items-center gap-2 shrink-0 self-end md:self-center border-t md:border-t-0 pt-2 md:pt-0 w-full md:w-auto justify-between md:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => onToggleStatus(item.id)}
+                            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-xs ${
+                              isDone
+                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
+                                : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'
+                            }`}
+                          >
+                            {isDone ? (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                                <span>সম্পন্ন হয়েছে</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-4 h-4" />
+                                <span>সম্পন্ন মার্ক করুন</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(item)}
+                            className="p-2.5 text-slate-600 hover:text-emerald-700 rounded-2xl hover:bg-emerald-50 border border-slate-200 transition-colors"
+                            title="এই ওষুধটি পরিবর্তন / এডিট করুন"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`আপনি কি "${item.medicineName}" মুছে ফেলতে চান?`)) {
+                                onDeleteMedicine(item.id);
+                              }
+                            }}
+                            className="p-2.5 text-slate-400 hover:text-rose-600 rounded-2xl hover:bg-rose-50 border border-slate-200 transition-colors"
+                            title="মুছে ফেলুন"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Bottom bar of day page */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddModal(viewingDay, '1')}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-all"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>+ এই {toBnNumber(viewingDay)}তম দিনে আরও একটি নতুন ওষুধ যোগ করুন</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewingDay(null)}
+                  className="text-xs font-bold text-slate-600 hover:text-slate-900 underline"
+                >
+                  ← সকল ওষুধের তালিকায় ফিরে যান
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Top Header Card */}
+          <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
@@ -876,15 +1272,17 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                   return (
                     <tr
                       key={item.id}
-                      className={`transition-colors ${
+                      onClick={() => setViewingDay(item.dayAge)}
+                      className={`transition-colors cursor-pointer group ${
                         isCompleted
-                          ? 'bg-slate-50/50 hover:bg-slate-100/60'
+                          ? 'bg-slate-50/50 hover:bg-emerald-50/70'
                           : isCurrentAge
-                          ? 'bg-emerald-50/70 hover:bg-emerald-50 font-medium'
+                          ? 'bg-emerald-50/70 hover:bg-emerald-100/70 font-medium'
                           : isPastPending
-                          ? 'bg-amber-50/60 hover:bg-amber-50/90'
-                          : 'hover:bg-slate-50'
+                          ? 'bg-amber-50/60 hover:bg-amber-100/70'
+                          : 'hover:bg-emerald-50/70'
                       }`}
+                      title={`${toBnNumber(item.dayAge)}তম দিনের সব ওষুধ ও প্রেসক্রিপশন দেখতে ক্লিক করুন`}
                     >
                       {/* Column 1: বয়সের দিন & '+ এই দিনে যোগ' shortcut */}
                       <td className="py-3 px-3 sm:px-4 text-center align-middle">
@@ -915,9 +1313,12 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                             )}
                             <button
                               type="button"
-                              onClick={() => handleOpenAddModal(item.dayAge, '1')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenAddModal(item.dayAge, '1');
+                              }}
                               className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline"
-                              title={`এই দিনে (${toBnNumber(item.dayAge)}তম দিন) আরও একটি ওষুধ বা নতুন শীট যোগ করুন`}
+                              title={`এই দিনে (${toBnNumber(item.dayAge)}তম দিন) আরও একটি ওষুধ যোগ করুন`}
                             >
                               +আরও
                             </button>
@@ -950,12 +1351,18 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                       {/* Column 3: ওষুধের নাম */}
                       <td className="py-3 px-3 sm:px-4 align-middle">
                         <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
-                          <span>{item.medicineName}</span>
+                          <span className="text-emerald-950 font-black group-hover:text-emerald-700 group-hover:underline underline-offset-2">
+                            {item.medicineName}
+                          </span>
                           {item.medicineType && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700">
                               {item.medicineType}
                             </span>
                           )}
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-50 group-hover:bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200 shadow-2xs">
+                            <ExternalLink className="w-2.5 h-2.5" />
+                            <span>ওই দিনের সব ওষুধ ➔</span>
+                          </span>
                         </div>
                       </td>
 
@@ -979,7 +1386,11 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                       {/* Column 5: স্ট্যাটাস (Clickable Checkbox) */}
                       <td className="py-3 px-3 sm:px-4 text-center align-middle">
                         <button
-                          onClick={() => onToggleStatus(item.id)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleStatus(item.id);
+                          }}
                           className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all shadow-2xs whitespace-nowrap ${
                             isCompleted
                               ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
@@ -1007,14 +1418,20 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                       <td className="py-3 px-3 sm:px-4 text-center align-middle whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => handleOpenEditModal(item)}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditModal(item);
+                            }}
                             className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-200"
                             title="এই নির্দিষ্ট দিনের ওষুধ পরিবর্তন / এডিট করুন"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => {
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               if (confirm(`আপনি কি "${item.medicineName}" মুছে ফেলতে চান?`)) {
                                 onDeleteMedicine(item.id);
                               }
@@ -1048,15 +1465,17 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
             return (
               <div
                 key={item.id}
-                className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                onClick={() => setViewingDay(item.dayAge)}
+                className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer group flex flex-col md:flex-row md:items-center justify-between gap-4 ${
                   isCompleted
-                    ? 'bg-slate-50/70 border-slate-200 opacity-85'
+                    ? 'bg-slate-50/70 border-slate-200 opacity-90 hover:border-emerald-300'
                     : isCurrentAge
-                    ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-400/40 shadow-xs'
+                    ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-400/40 shadow-xs hover:border-emerald-400'
                     : isPastPending
-                    ? 'bg-amber-50/80 border-amber-300'
-                    : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-2xs'
+                    ? 'bg-amber-50/80 border-amber-300 hover:border-amber-400'
+                    : 'bg-white border-slate-200/80 hover:border-emerald-400 hover:shadow-xs'
                 }`}
+                title={`${toBnNumber(item.dayAge)}তম দিনের সব ওষুধ ও চিকিৎসাপত্র দেখতে ক্লিক করুন`}
               >
                 {/* Left Side: Age Badge and Details */}
                 <div className="flex items-start gap-4">
@@ -1082,7 +1501,10 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => handleOpenAddModal(item.dayAge, '1')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenAddModal(item.dayAge, '1');
+                      }}
                       className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline mt-1"
                     >
                       + এই দিনে যোগ
@@ -1090,9 +1512,11 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                   </div>
 
                   {/* Information */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-bold text-slate-900 text-base">{item.medicineName}</h4>
+                      <h4 className="font-black text-slate-900 text-base group-hover:text-emerald-700 group-hover:underline underline-offset-2">
+                        {item.medicineName}
+                      </h4>
 
                       {item.medicineType && (
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
@@ -1153,13 +1577,25 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                         সম্পন্ন করার তারিখ: {formatBnDate(item.completedAt.split('T')[0])}
                       </p>
                     )}
+
+                    {/* Click-to-Day View Pill */}
+                    <div className="pt-1">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200/80 shadow-2xs group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>এই {toBnNumber(item.dayAge)}তম দিনের সব ওষুধ বিস্তারিত দেখুন ({toBnNumber(countThisDay)}টি) ➔</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Right Side: Toggle Status, Edit, and Delete */}
                 <div className="flex items-center gap-2 self-end md:self-center shrink-0">
                   <button
-                    onClick={() => onToggleStatus(item.id)}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleStatus(item.id);
+                    }}
                     className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
                       isCompleted
                         ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
@@ -1180,7 +1616,11 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                   </button>
 
                   <button
-                    onClick={() => handleOpenEditModal(item)}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenEditModal(item);
+                    }}
                     className="p-2 text-slate-500 hover:text-emerald-700 rounded-xl hover:bg-emerald-50 border border-slate-200 transition-colors"
                     title="এই নির্দিষ্ট দিনের ওষুধ পরিবর্তন / এডিট করুন"
                   >
@@ -1188,7 +1628,9 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                   </button>
 
                   <button
-                    onClick={() => {
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
                       if (confirm(`আপনি কি "${item.medicineName}" মুছে ফেলতে চান?`)) {
                         onDeleteMedicine(item.id);
                       }
@@ -1203,6 +1645,8 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
             );
           })}
         </div>
+      )}
+        </>
       )}
 
       {/* Multi-Medicine Sheet Modal */}
@@ -1439,20 +1883,22 @@ export const MedicineSchedule: React.FC<MedicineScheduleProps> = ({
                             <button
                               key={opt.id}
                               type="button"
-                              onClick={() => {
-                                handleUpdateRowField(row.id, 'timeOfDay', opt.id);
-                                // If timing dosage is empty or matches another default, fill in standard recommendation
-                                if (
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const shouldUpdateDosage =
                                   !row.timingAndDosage.trim() ||
-                                  MEDICINE_TIMING_OPTIONS.some((o) => row.timingAndDosage === o.defaultDosageNote)
-                                ) {
-                                  handleUpdateRowField(row.id, 'timingAndDosage', opt.defaultDosageNote);
-                                }
+                                  MEDICINE_TIMING_OPTIONS.some((o) => row.timingAndDosage === o.defaultDosageNote);
+                                
+                                handleUpdateRowMultiple(row.id, {
+                                  timeOfDay: opt.id,
+                                  ...(shouldUpdateDosage ? { timingAndDosage: opt.defaultDosageNote } : {})
+                                });
                               }}
-                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer select-none active:scale-95 shadow-2xs ${
                                 isSelected
-                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs scale-102 ring-2 ring-emerald-500/20'
-                                  : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40'
+                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-500/30 font-black'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/60'
                               }`}
                             >
                               <span>{opt.label}</span>
