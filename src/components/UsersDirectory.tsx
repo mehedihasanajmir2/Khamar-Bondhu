@@ -41,9 +41,13 @@ export const UsersDirectory: React.FC<UsersDirectoryProps> = ({
   isAdmin: propIsAdmin,
   onOpenAuthModal
 }) => {
+  const isPhoneAdmin = Boolean(
+    currentUser?.phone && currentUser.phone.replace(/[^0-9]/g, '').endsWith('1946406095')
+  );
   const isDirectAdmin =
     Boolean(currentUser?.email && currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) ||
     currentUser?.role === 'admin' ||
+    isPhoneAdmin ||
     propIsAdmin;
 
   const [adminUnlocked, setAdminUnlocked] = useState<boolean>(() => {
