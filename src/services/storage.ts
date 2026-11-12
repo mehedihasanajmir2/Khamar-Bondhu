@@ -345,16 +345,57 @@ export class PoultryStorageService {
   // --- User Profiles & Auth ---
   static getUsers(): UserProfile[] {
     const raw = localStorage.getItem(USERS_KEY);
+    let list: UserProfile[] = [];
     if (!raw) {
-      localStorage.setItem(USERS_KEY, JSON.stringify(DEMO_PROFILES));
+      list = [...DEMO_PROFILES];
       this.seedInitialDemoData();
-      return DEMO_PROFILES;
+    } else {
+      try {
+        list = JSON.parse(raw);
+      } catch {
+        list = [...DEMO_PROFILES];
+      }
     }
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return DEMO_PROFILES;
+
+    // Ensure dedicated user account for 01946406095 with password Mha@#2005
+    const targetPhone = '01946406095';
+    const targetUid = 'usr_01946406095';
+    const targetPassHash = simpleHash('Mha@#2005');
+    const existingIdx = list.findIndex(
+      (u) =>
+        u.uid === targetUid ||
+        (u.phone && u.phone.replace(/[^0-9]/g, '').endsWith('1946406095')) ||
+        (u.email && u.email.includes('01946406095'))
+    );
+
+    if (existingIdx >= 0) {
+      list[existingIdx] = {
+        ...list[existingIdx],
+        uid: targetUid,
+        phone: targetPhone,
+        email: list[existingIdx].email || '01946406095@khamar.app',
+        passwordHash: targetPassHash,
+        role: 'admin'
+      };
+    } else {
+      list.push({
+        uid: targetUid,
+        email: '01946406095@khamar.app',
+        name: 'মেহেদী হাসান (অ্যাডমিন)',
+        farmName: 'মডার্ন পোল্ট্রি ফার্ম',
+        phone: targetPhone,
+        whatsapp: targetPhone,
+        location: 'বাংলাদেশ',
+        capacity: 2500,
+        birdType: 'ব্রয়লার',
+        registrationDate: '2026-11-12',
+        passwordHash: targetPassHash,
+        role: 'admin'
+      });
     }
+
+    localStorage.setItem(USERS_KEY, JSON.stringify(list));
+    return list;
   }
 
   static getUserById(uid: string): UserProfile | null {
