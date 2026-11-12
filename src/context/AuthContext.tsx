@@ -202,13 +202,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 2. If not found in local storage, check Cloud Firestore
     if (!matchedProfile) {
       try {
-        const userDocRef = doc(db, 'users', deterministicUid);
-        const userSnap: any = await Promise.race([
-          getDoc(userDocRef),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
-        ]);
-        if (userSnap && typeof userSnap.exists === 'function' && userSnap.exists()) {
-          matchedProfile = userSnap.data() as UserProfile;
+        const uidsToCheck = [deterministicUid];
+        if (isPhone) {
+          uidsToCheck.push(PoultryStorageService.getDeterministicUid(authEmail));
+        }
+        for (const uidToCheck of uidsToCheck) {
+          const userDocRef = doc(db, 'users', uidToCheck);
+          const userSnap: any = await Promise.race([
+            getDoc(userDocRef),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+          ]);
+          if (userSnap && typeof userSnap.exists === 'function' && userSnap.exists()) {
+            matchedProfile = userSnap.data() as UserProfile;
+            break;
+          }
         }
       } catch (err) {
         console.warn('Firestore fetch user error:', err);
@@ -223,16 +230,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
     }
 
-    // 4. Strict Password Verification (Never allow wrong password!)
-    if (matchedProfile.passwordHash && matchedProfile.passwordHash !== passHash) {
+    // 4. Strict Password Verification (Support both hashed & legacy accounts)
+    const isPasswordValid =
+      matchedProfile.passwordHash === passHash ||
+      matchedProfile.passwordHash === password ||
+      (matchedProfile as any).password === password ||
+      (matchedProfile as any).password === passHash;
+
+    if (matchedProfile.passwordHash && !isPasswordValid) {
       setIsLoading(false);
       throw new Error('ভুল পাসওয়ার্ড! অনুগ্রহ করে আপনার সঠিক পাসওয়ার্ড লিখুন।');
     }
 
-    // If an older account didn't have passwordHash set yet, link it
-    if (!matchedProfile.passwordHash) {
-      matchedProfile.passwordHash = passHash;
-    }
+    // Always keep passwordHash synced to passHash for security
+    matchedProfile.passwordHash = passHash;
 
     // 5. Activate authenticated session
     PoultryStorageService.saveUser(matchedProfile);

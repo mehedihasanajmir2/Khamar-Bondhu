@@ -22,6 +22,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [birdType, setBirdType] = useState<BirdType>('ব্রয়লার');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (!isOpen) return null;
 
@@ -201,16 +202,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">পাসওয়ার্ড *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700">পাসওয়ার্ড *</label>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-[11px] text-emerald-700 hover:text-emerald-800 font-bold"
+              >
+                {showPassword ? 'পাসওয়ার্ড লুকান 🙈' : 'পাসওয়ার্ড দেখুন 👁️'}
+              </button>
+            </div>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
-                placeholder="•••••••• (কমপক্ষে ৬ অক্ষর)"
+                placeholder="কমপক্ষে ৬ অক্ষর বা সংখ্যা"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full pl-9 pr-10 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
               />
             </div>
           </div>

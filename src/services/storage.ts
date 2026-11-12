@@ -371,17 +371,37 @@ export class PoultryStorageService {
     const users = this.getUsers();
     const clean = identifier.trim().toLowerCase();
     const digitsOnly = clean.replace(/[^0-9]/g, '');
+    const last10Digits = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly;
+
     return (
       users.find((u) => {
-        if (u.email.toLowerCase() === clean) return true;
+        // Direct email match
+        if (u.email && u.email.toLowerCase() === clean) return true;
+        
+        // Direct uid match
+        if (u.uid && u.uid.toLowerCase() === clean) return true;
+
+        // Phone match
         if (u.phone) {
           const userPhoneDigits = u.phone.replace(/[^0-9]/g, '');
-          if (digitsOnly && digitsOnly.length >= 6 && userPhoneDigits.endsWith(digitsOnly)) return true;
+          if (digitsOnly && userPhoneDigits) {
+            if (userPhoneDigits === digitsOnly) return true;
+            if (last10Digits.length >= 8 && userPhoneDigits.endsWith(last10Digits)) return true;
+            if (digitsOnly.length >= 8 && userPhoneDigits.endsWith(digitsOnly)) return true;
+          }
         }
-        if (u.email.includes('@')) {
-          const userEmailDigits = u.email.split('@')[0].replace(/[^0-9]/g, '');
-          if (digitsOnly && digitsOnly.length >= 6 && userEmailDigits === digitsOnly) return true;
+
+        // Email containing phone alias (e.g. 01946406095@khamar.app)
+        if (u.email && u.email.includes('@')) {
+          const userEmailPrefix = u.email.split('@')[0];
+          const userEmailDigits = userEmailPrefix.replace(/[^0-9]/g, '');
+          if (digitsOnly && userEmailDigits) {
+            if (userEmailDigits === digitsOnly) return true;
+            if (last10Digits.length >= 8 && userEmailDigits.endsWith(last10Digits)) return true;
+            if (digitsOnly.length >= 8 && userEmailDigits.endsWith(digitsOnly)) return true;
+          }
         }
+
         return false;
       }) || null
     );
@@ -392,6 +412,8 @@ export class PoultryStorageService {
     const cleanId = emailOrIdentifier.trim().toLowerCase();
     const idDigits = cleanId.replace(/[^0-9]/g, '');
     const cleanPhoneDigits = (phone || '').replace(/[^0-9]/g, '');
+    const last10Id = idDigits.length >= 10 ? idDigits.slice(-10) : idDigits;
+    const last10Phone = cleanPhoneDigits.length >= 10 ? cleanPhoneDigits.slice(-10) : cleanPhoneDigits;
 
     return users.some((u) => {
       // 1. Direct email match
@@ -400,15 +422,15 @@ export class PoultryStorageService {
       // 2. Direct phone match
       if (u.phone) {
         const uPhoneDigits = u.phone.replace(/[^0-9]/g, '');
-        if (idDigits && idDigits.length >= 8 && uPhoneDigits.endsWith(idDigits)) return true;
-        if (cleanPhoneDigits && cleanPhoneDigits.length >= 8 && uPhoneDigits.endsWith(cleanPhoneDigits)) return true;
+        if (last10Id && last10Id.length >= 8 && uPhoneDigits.endsWith(last10Id)) return true;
+        if (last10Phone && last10Phone.length >= 8 && uPhoneDigits.endsWith(last10Phone)) return true;
       }
 
       // 3. Email alias for phone (e.g. 017... @khamar.app)
-      if (u.email.includes('@khamar.app')) {
+      if (u.email && u.email.includes('@khamar.app')) {
         const uEmailDigits = u.email.split('@')[0].replace(/[^0-9]/g, '');
-        if (idDigits && idDigits.length >= 8 && uEmailDigits === idDigits) return true;
-        if (cleanPhoneDigits && cleanPhoneDigits.length >= 8 && uEmailDigits === cleanPhoneDigits) return true;
+        if (last10Id && last10Id.length >= 8 && uEmailDigits.endsWith(last10Id)) return true;
+        if (last10Phone && last10Phone.length >= 8 && uEmailDigits.endsWith(last10Phone)) return true;
       }
 
       return false;
