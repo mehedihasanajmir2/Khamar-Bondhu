@@ -194,67 +194,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const passHash = simpleHash(password);
     const deterministicUid = PoultryStorageService.getDeterministicUid(cleanInput);
 
-    // 1. Instant check in LocalStorage (< 50ms)
+    // 1. Look up profile in local storage
     let matchedProfile =
       PoultryStorageService.getUserById(deterministicUid) ||
       PoultryStorageService.getUserByEmailOrPhone(cleanInput);
 
-    if (matchedProfile) {
-      matchedProfile.passwordHash = passHash;
-      PoultryStorageService.saveUser(matchedProfile);
-      PoultryStorageService.setActiveUserId(matchedProfile.uid);
-      setCurrentUser(matchedProfile);
-      setSyncVersion((v) => v + 1);
-      setAuthPromptReason(null);
-      setIsLoading(false);
-
-      // Background cloud sync (non-blocking)
-      const userUid = matchedProfile.uid;
-      const cached = matchedProfile;
-      setTimeout(() => {
-        setDoc(doc(db, 'users', userUid), cleanForFirestore(cached), { merge: true })
-          .then(() => PoultryStorageService.syncUserFromFirestore(userUid))
-          .then((synced) => {
-            if (synced) setSyncVersion((v) => v + 1);
-          })
-          .catch((err) => console.warn('Background sync error:', err));
-      }, 0);
-
-      return true;
-    }
-
-    // 2. Cross-device lookup in Cloud Firestore with a fast 1.5s timeout!
-    try {
-      const userDocRef = doc(db, 'users', deterministicUid);
-      const userSnap: any = await Promise.race([
-        getDoc(userDocRef),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500))
-      ]);
-      if (userSnap && typeof userSnap.exists === 'function' && userSnap.exists()) {
-        matchedProfile = userSnap.data() as UserProfile;
-        matchedProfile.passwordHash = passHash;
-      }
-    } catch (err) {
-      console.warn('Firestore fetch user error:', err);
-    }
-
-    // 3. Fallback / First-time account initialization
+    // 2. If not found in local storage, check Cloud Firestore
     if (!matchedProfile) {
-      matchedProfile = {
-        uid: deterministicUid,
-        name: 'খামারী',
-        farmName: 'ফার্মহিসাব পোল্ট্রি খামার',
-        email: isPhone ? authEmail : cleanInput,
-        phone: isPhone ? displayPhone : '০১৭০০-০০০০০০',
-        location: 'বাংলাদেশ',
-        capacity: 1000,
-        birdType: 'ব্রয়লার',
-        registrationDate: new Date().toISOString().split('T')[0],
-        passwordHash: passHash
-      };
+      try {
+        const userDocRef = doc(db, 'users', deterministicUid);
+        const userSnap: any = await Promise.race([
+          getDoc(userDocRef),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+        ]);
+        if (userSnap && typeof userSnap.exists === 'function' && userSnap.exists()) {
+          matchedProfile = userSnap.data() as UserProfile;
+        }
+      } catch (err) {
+        console.warn('Firestore fetch user error:', err);
+      }
     }
 
-    // 4. Save and activate user immediately (User is logged in right away!)
+    // 3. User account MUST exist! Never auto-create during login
+    if (!matchedProfile) {
+      setIsLoading(false);
+      throw new Error(
+        'এই মোবাইল নম্বর বা ইমেইল দিয়ে কোনো একাউন্ট পাওয়া যায়নি! অনুগ্রহ করে প্রথমে "নতুন একাউন্ট খুলুন" ট্যাবে গিয়ে নিবন্ধন করুন।'
+      );
+    }
+
+    // 4. Strict Password Verification (Never allow wrong password!)
+    if (matchedProfile.passwordHash && matchedProfile.passwordHash !== passHash) {
+      setIsLoading(false);
+      throw new Error('ভুল পাসওয়ার্ড! অনুগ্রহ করে আপনার সঠিক পাসওয়ার্ড লিখুন।');
+    }
+
+    // If an older account didn't have passwordHash set yet, link it
+    if (!matchedProfile.passwordHash) {
+      matchedProfile.passwordHash = passHash;
+    }
+
+    // 5. Activate authenticated session
     PoultryStorageService.saveUser(matchedProfile);
     PoultryStorageService.setActiveUserId(matchedProfile.uid);
     setCurrentUser(matchedProfile);
@@ -262,7 +242,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthPromptReason(null);
     setIsLoading(false);
 
-    // 5. Background sync for batches & subcollections (non-blocking)
+    // 6. Background sync for batches & subcollections
     const activeUid = matchedProfile.uid;
     const finalProfile = matchedProfile;
     setTimeout(() => {

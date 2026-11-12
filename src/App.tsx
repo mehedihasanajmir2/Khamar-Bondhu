@@ -661,6 +661,7 @@ const MainApp: React.FC = () => {
             onArchiveBatch={handleRequestArchive}
             onRestoreBatch={handleRestoreBatch}
             onOpenNewBatchModal={handleOpenNewBatchModal}
+            onOpenAdminPanel={() => setActiveTab('users_directory')}
           />
         )}
       </main>

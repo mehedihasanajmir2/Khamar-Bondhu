@@ -46,6 +46,7 @@ interface UserProfileProps {
   onArchiveBatch?: (batchId: string) => void;
   onRestoreBatch?: (batchId: string) => void;
   onOpenNewBatchModal?: () => void;
+  onOpenAdminPanel?: () => void;
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({
@@ -54,7 +55,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onSelectBatch,
   onArchiveBatch,
   onRestoreBatch,
-  onOpenNewBatchModal
+  onOpenNewBatchModal,
+  onOpenAdminPanel
 }) => {
   const { currentUser, updateProfile, allDemoUsers, switchUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
@@ -224,8 +226,36 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           </button>
         </div>
 
+        {/* Admin Access Banner (Direct link to Admin Panel) */}
+        {onOpenAdminPanel && (
+          <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
+                👑
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-amber-950">
+                  অ্যাডমিন ডিরেক্টরি ও বাল্ক SMS কন্ট্রোল সেন্টার
+                </h4>
+                <p className="text-xs text-amber-800">
+                  কে কে একাউন্ট খুলল দেখতে, তাদের ফোন নম্বরে SMS বা WhatsApp পাঠাতে সরাসরি প্রবেশ করুন।
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onOpenAdminPanel}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md transition-all active:scale-95 shrink-0"
+            >
+              <span>অ্যাডমিন প্যানেলে প্রবেশ করুন</span>
+              <span>➔</span>
+            </button>
+          </div>
+        )}
+
         {/* Unique User ID Card & RLS Badge */}
-        <div className="mt-6 bg-slate-900 text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="mt-4 bg-slate-900 text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
               <Lock className="w-3.5 h-3.5" /> অপরিবর্তনীয় খামারী ইউজার আইডি (Unique User ID)

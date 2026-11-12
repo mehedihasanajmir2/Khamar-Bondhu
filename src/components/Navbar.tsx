@@ -50,7 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     Boolean(currentUser?.email && currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) ||
     currentUser?.role === 'admin';
 
-  const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
+  const navItems: { id: TabType; label: string; icon: React.ReactNode; isSpecial?: boolean }[] = [
     { id: 'dashboard', label: 'ড্যাশবোর্ড', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'batch', label: 'ব্যাচ ও বৃদ্ধি', icon: <Layers className="w-5 h-5" /> },
     { id: 'medicine', label: 'ওষুধ ও টিকা', icon: <Syringe className="w-5 h-5" /> },
@@ -58,9 +58,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'sales', label: 'বিক্রি ও আয়', icon: <TrendingUp className="w-5 h-5" /> },
     { id: 'reports', label: 'হিসাব বিবরণী', icon: <FileSpreadsheet className="w-5 h-5" /> },
     { id: 'assistant', label: 'AI সহকারী', icon: <Bot className="w-5 h-5" /> },
-    ...(isAdmin
-      ? [{ id: 'users_directory' as TabType, label: 'খামারী ও SMS (অ্যাডমিন)', icon: <Users className="w-5 h-5" /> }]
-      : []),
+    {
+      id: 'users_directory',
+      label: isAdmin ? '👑 অ্যাডমিন কন্ট্রোল' : '🔐 অ্যাডমিন প্যানেল',
+      icon: <Users className="w-5 h-5" />,
+      isSpecial: true
+    },
     { id: 'profile', label: 'প্রোফাইল', icon: <UserCheck className="w-5 h-5" /> },
   ];
 
@@ -157,6 +160,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>একাউন্ট তৈরি / লগইন</span>
                 </button>
 
+                {/* Admin Quick Shortcut */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('users_directory')}
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl border transition-all shadow-xs ${
+                    activeTab === 'users_directory'
+                      ? 'bg-amber-600 text-white border-amber-600'
+                      : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+                  }`}
+                  title="অ্যাডমিন প্যানেলে যান"
+                >
+                  <Users className="w-3.5 h-3.5 text-amber-700" />
+                  <span className="hidden sm:inline">অ্যাডমিন</span>
+                </button>
+
                 {/* New Batch button (will trigger auth gate) */}
                 <button
                   onClick={onOpenNewBatchModal}
@@ -213,6 +231,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="sm:hidden">ডেমো</span>
                 </button>
 
+                {/* Admin Quick Shortcut */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('users_directory')}
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-xl border transition-all shadow-xs ${
+                    activeTab === 'users_directory'
+                      ? 'bg-amber-600 text-white border-amber-600'
+                      : 'bg-amber-100/80 hover:bg-amber-200/90 text-amber-900 border-amber-300'
+                  }`}
+                  title="খামারী তালিকা, ফোন নম্বর ও বাল্ক SMS পাঠাতে অ্যাডমিন প্যানেল"
+                >
+                  <Users className="w-3.5 h-3.5 text-amber-700" />
+                  <span className="hidden md:inline">অ্যাডমিন প্যানেল</span>
+                  <span className="md:hidden">অ্যাডমিন</span>
+                </button>
+
                 {/* New Batch button */}
                 <button
                   onClick={onOpenNewBatchModal}
@@ -252,7 +286,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => setActiveTab(item.id)}
                 className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
                   isActive
-                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30 font-bold'
+                    ? item.isSpecial
+                      ? 'bg-amber-600 text-white shadow-sm shadow-amber-600/30 font-bold'
+                      : 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30 font-bold'
+                    : item.isSpecial
+                    ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 font-bold'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
