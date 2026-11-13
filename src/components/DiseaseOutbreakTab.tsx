@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Batch, DiseaseOutbreakRecord } from '../types';
 import { formatBnDate, getTodayDateString, toBnNumber } from '../utils/formatters';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface DiseaseOutbreakTabProps {
   activeBatch: Batch;
@@ -73,6 +74,7 @@ export const DiseaseOutbreakTab: React.FC<DiseaseOutbreakTabProps> = ({
   onToggleDiseaseStatus,
   onDeleteDiseaseLog
 }) => {
+  const { confirmAction } = useConfirm();
   const [filterStatus, setFilterStatus] = useState<'all' | 'ongoing' | 'recovered'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -183,15 +185,15 @@ export const DiseaseOutbreakTab: React.FC<DiseaseOutbreakTabProps> = ({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 w-full min-w-0">
       {/* Header Banner */}
-      <div className="bg-white p-5 rounded-3xl border border-rose-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-rose-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 w-full min-w-0">
+        <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 flex-1">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
             <HeartPulse className="w-5 h-5" />
           </div>
-          <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base sm:text-xl font-black text-slate-900 break-words">
               জরুরি রোগ ও হঠাৎ চিকিৎসা লগ ({activeBatch.batchName})
             </h3>
             <p className="text-xs text-slate-600 mt-0.5 max-w-2xl">
@@ -203,9 +205,9 @@ export const DiseaseOutbreakTab: React.FC<DiseaseOutbreakTabProps> = ({
         <button
           type="button"
           onClick={handleOpenAdd}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-all active:scale-95 shrink-0"
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-all active:scale-95 shrink-0"
         >
-          <PlusCircle className="w-4 h-4" />
+          <PlusCircle className="w-4 h-4 shrink-0" />
           <span>+ হঠাৎ রোগ ও চিকিৎসা যোগ করুন</span>
         </button>
       </div>
@@ -409,7 +411,7 @@ export const DiseaseOutbreakTab: React.FC<DiseaseOutbreakTabProps> = ({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0 self-end lg:self-center pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 w-full lg:w-auto justify-end">
+                  <div className="flex items-center gap-2 flex-wrap shrink-0 self-end lg:self-center pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 w-full lg:w-auto justify-end">
                     <button
                       type="button"
                       onClick={() => onToggleDiseaseStatus(log.id)}
@@ -443,8 +445,14 @@ export const DiseaseOutbreakTab: React.FC<DiseaseOutbreakTabProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (confirm(`আপনি কি "${log.diseaseName}" রেকর্ডটি মুছে ফেলতে চান?`)) {
+                      onClick={async () => {
+                        const ok = await confirmAction({
+                          title: 'রোগের রেকর্ড মুছে ফেলবেন?',
+                          message: `আপনি কি "${log.diseaseName}" রেকর্ডটি মুছে ফেলতে চান?`,
+                          confirmLabel: 'হ্যাঁ, মুছে ফেলুন',
+                          tone: 'danger'
+                        });
+                        if (ok) {
                           onDeleteDiseaseLog(log.id);
                         }
                       }}

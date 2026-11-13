@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ConfirmProvider, useConfirm } from './context/ConfirmContext';
 import { Navbar, TabType } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { BatchManager } from './components/BatchManager';
@@ -50,6 +51,7 @@ const MainApp: React.FC = () => {
     setIsAuthModalOpen,
     openAuthModalWithReason
   } = useAuth();
+  const { confirmAction } = useConfirm();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
   // Modals
@@ -123,6 +125,12 @@ const MainApp: React.FC = () => {
         });
       } else {
         setActiveBatchId(null);
+        setGrowthRecords([]);
+        setMedicines([]);
+        setDiseaseLogs([]);
+        setExpenses([]);
+        setSales([]);
+        setSummary(null);
       }
     } catch (err: any) {
       console.error('RLS Isolation check:', err);
@@ -288,10 +296,16 @@ const MainApp: React.FC = () => {
     showToast('ব্যাচ পুনরায় সক্রিয় করা হয়েছে');
   };
 
-  const handleDeleteBatch = (batchId: string) => {
+  const handleDeleteBatch = async (batchId: string) => {
     if (!requireAuth('ব্যাচ মুছে ফেলতে একাউন্ট তৈরি বা লগইন করুন।')) return;
     if (!currentUser) return;
-    if (confirm('আপনি কি নিশ্চিত এই সম্পূর্ণ ব্যাচ ও এর সমস্ত হিসাব মুছে ফেলতে চান?')) {
+    const confirmed = await confirmAction({
+      title: 'সম্পূর্ণ ব্যাচ মুছে ফেলবেন?',
+      message: 'আপনি কি নিশ্চিত এই সম্পূর্ণ ব্যাচ ও এর সমস্ত হিসাব মুছে ফেলতে চান? এটি আর ফিরিয়ে আনা যাবে না।',
+      confirmLabel: 'হ্যাঁ, মুছে ফেলুন',
+      tone: 'danger'
+    });
+    if (confirmed) {
       PoultryStorageService.deleteBatch(currentUser.uid, batchId);
       const remaining = PoultryStorageService.getBatches(currentUser.uid);
       setBatches(remaining);
@@ -580,7 +594,7 @@ const MainApp: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-['Hind_Siliguri',sans-serif]">
+    <div className="min-h-screen w-full overflow-x-clip bg-slate-50 flex flex-col font-['Hind_Siliguri',sans-serif]">
       {/* Toast Notification */}
       {notification && (
         <div className="fixed top-20 right-4 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 animate-bounce">
@@ -636,7 +650,7 @@ const MainApp: React.FC = () => {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 pb-24 sm:pb-8">
+      <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-5 pb-24 sm:pb-8">
         {activeTab === 'dashboard' && (
           <Dashboard
             activeBatch={activeBatch}
@@ -773,96 +787,96 @@ const MainApp: React.FC = () => {
       )}
 
       {/* Mobile Bottom Navigation Bar - Ultra Ergonomic & Touch-Friendly */}
-      <nav aria-label="মোবাইল মেনু" className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 px-1 py-1 flex justify-around shadow-lg">
+      <nav aria-label="মোবাইল মেনু" className="sm:hidden fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 px-1 py-1 flex items-center justify-between gap-0.5 shadow-lg">
         <button
           type="button"
           onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center justify-center p-1 rounded-xl text-[10px] font-bold transition-all ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl text-[10px] font-bold transition-all ${
             activeTab === 'dashboard'
-              ? 'text-emerald-700 bg-emerald-50 scale-105'
+              ? 'text-emerald-700 bg-emerald-50'
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <LayoutDashboard className="w-4 h-4 mb-0.5" />
-          <span>হোম</span>
+          <LayoutDashboard className="w-4 h-4 mb-0.5 shrink-0" />
+          <span className="truncate w-full text-center">হোম</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('batch')}
-          className={`flex flex-col items-center justify-center p-1 rounded-xl text-[10px] font-bold transition-all ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl text-[10px] font-bold transition-all ${
             activeTab === 'batch'
-              ? 'text-emerald-700 bg-emerald-50 scale-105'
+              ? 'text-emerald-700 bg-emerald-50'
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Layers className="w-4 h-4 mb-0.5" />
-          <span>ব্যাচ</span>
+          <Layers className="w-4 h-4 mb-0.5 shrink-0" />
+          <span className="truncate w-full text-center">ব্যাচ</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('medicine')}
-          className={`flex flex-col items-center justify-center p-1 rounded-xl text-[10px] font-bold transition-all ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl text-[10px] font-bold transition-all ${
             activeTab === 'medicine'
-              ? 'text-emerald-700 bg-emerald-50 scale-105'
+              ? 'text-emerald-700 bg-emerald-50'
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Syringe className="w-4 h-4 mb-0.5" />
-          <span>ওষুধ</span>
+          <Syringe className="w-4 h-4 mb-0.5 shrink-0" />
+          <span className="truncate w-full text-center">ওষুধ</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('assistant')}
-          className={`flex flex-col items-center justify-center p-1 rounded-xl text-[10px] font-bold transition-all ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl text-[10px] font-bold transition-all ${
             activeTab === 'assistant'
-              ? 'text-emerald-700 bg-emerald-50 scale-105 font-black'
+              ? 'text-emerald-700 bg-emerald-50 font-black'
               : 'text-emerald-600 hover:text-emerald-800'
           }`}
         >
-          <Bot className="w-4 h-4 mb-0.5 text-emerald-600 animate-pulse" />
-          <span>AI সহকারী</span>
+          <Bot className="w-4 h-4 mb-0.5 text-emerald-600 shrink-0" />
+          <span className="truncate w-full text-center">AI</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('expenses')}
-          className={`flex flex-col items-center justify-center p-1 rounded-xl text-[10px] font-bold transition-all ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl text-[10px] font-bold transition-all ${
             activeTab === 'expenses'
-              ? 'text-rose-700 bg-rose-50 scale-105'
+              ? 'text-rose-700 bg-rose-50'
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Receipt className="w-4 h-4 mb-0.5" />
-          <span>খরচ</span>
+          <Receipt className="w-4 h-4 mb-0.5 shrink-0" />
+          <span className="truncate w-full text-center">খরচ</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('sales')}
-          className={`flex flex-col items-center justify-center p-1 rounded-xl text-[10px] font-bold transition-all ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl text-[10px] font-bold transition-all ${
             activeTab === 'sales'
-              ? 'text-teal-700 bg-teal-50 scale-105'
+              ? 'text-teal-700 bg-teal-50'
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <TrendingUp className="w-4 h-4 mb-0.5" />
-          <span>বিক্রি</span>
+          <TrendingUp className="w-4 h-4 mb-0.5 shrink-0" />
+          <span className="truncate w-full text-center">বিক্রি</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center justify-center p-1 rounded-xl text-[10px] font-bold transition-all ${
+          className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl text-[10px] font-bold transition-all ${
             activeTab === 'profile'
-              ? 'text-indigo-700 bg-indigo-50 scale-105'
+              ? 'text-indigo-700 bg-indigo-50'
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <UserCheck className="w-4 h-4 mb-0.5" />
-          <span>প্রোফাইল</span>
+          <UserCheck className="w-4 h-4 mb-0.5 shrink-0" />
+          <span className="truncate w-full text-center">প্রোফাইল</span>
         </button>
       </nav>
 
@@ -897,7 +911,9 @@ const MainApp: React.FC = () => {
 export default function App() {
   return (
     <AuthProvider>
-      <MainApp />
+      <ConfirmProvider>
+        <MainApp />
+      </ConfirmProvider>
     </AuthProvider>
   );
 }

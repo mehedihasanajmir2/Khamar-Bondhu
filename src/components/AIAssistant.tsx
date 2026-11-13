@@ -24,6 +24,7 @@ import {
 import { Batch, UserProfile } from '../types';
 import { toBnNumber } from '../utils/formatters';
 import { generatePoultryResponse } from '../utils/poultryKnowledge';
+import { useConfirm } from '../context/ConfirmContext';
 
 export interface WebSource {
   title: string;
@@ -117,6 +118,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
   batches = [],
   onSelectBatch,
 }) => {
+  const { confirmAction } = useConfirm();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome-1',
@@ -163,8 +165,14 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleClearChat = () => {
-    if (window.confirm('আপনি কি এই চ্যাট মুছে নতুন করে শুরু করতে চান?')) {
+  const handleClearChat = async () => {
+    const ok = await confirmAction({
+      title: 'চ্যাট মুছে ফেলবেন?',
+      message: 'আপনি কি এই চ্যাট মুছে নতুন করে শুরু করতে চান?',
+      confirmLabel: 'হ্যাঁ, মুছে ফেলুন',
+      tone: 'danger'
+    });
+    if (ok) {
       setMessages([
         {
           id: 'welcome-reset',

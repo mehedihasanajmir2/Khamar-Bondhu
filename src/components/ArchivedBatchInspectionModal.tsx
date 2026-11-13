@@ -21,6 +21,7 @@ import {
 import { Batch, BatchSummary, ExpenseRecord, GrowthRecord, MedicineScheduleItem, SaleRecord } from '../types';
 import { PoultryStorageService } from '../services/storage';
 import { formatBnDate, formatTaka, formatWeight, toBnNumber } from '../utils/formatters';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface ArchivedBatchInspectionModalProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export const ArchivedBatchInspectionModal: React.FC<ArchivedBatchInspectionModal
   onRestoreBatch,
   onSelectActiveBatch
 }) => {
+  const { confirmAction } = useConfirm();
   const [activeTab, setActiveTab] = useState<ModalTab>('financials');
   const [historyData, setHistoryData] = useState<{
     summary: BatchSummary | null;
@@ -503,8 +505,14 @@ export const ArchivedBatchInspectionModal: React.FC<ArchivedBatchInspectionModal
             {onRestoreBatch && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm('আপনি কি এই ব্যাচটি পুনরায় সক্রিয় করতে চান?')) {
+                onClick={async () => {
+                  const ok = await confirmAction({
+                    title: 'ব্যাচ পুনরায় সক্রিয় করবেন?',
+                    message: 'আপনি কি এই ব্যাচটি পুনরায় সক্রিয় করতে চান?',
+                    confirmLabel: 'হ্যাঁ, সক্রিয় করুন',
+                    tone: 'warning'
+                  });
+                  if (ok) {
                     onRestoreBatch(batch.id);
                     onClose();
                   }

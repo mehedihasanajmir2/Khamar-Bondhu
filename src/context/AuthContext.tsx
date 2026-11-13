@@ -71,21 +71,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Sync with Firebase Authentication state
   useEffect(() => {
+    let settled = false;
+    const finishBoot = () => {
+      if (!settled) {
+        settled = true;
+        setIsLoading(false);
+      }
+    };
+
+    // Hard failsafe: never keep the app stuck on boot loading screen
+    const bootFailsafeTimer = setTimeout(() => {
+      if (!settled) {
+        const activeUid = PoultryStorageService.getActiveUserId();
+        const fallbackUser =
+          (activeUid ? PoultryStorageService.getUserById(activeUid) : null) || DEMO_PROFILES[0];
+        setCurrentUser((prev) => prev || fallbackUser);
+        finishBoot();
+      }
+    }, 3000);
+
+    const normalizeProfile = (raw: UserProfile): UserProfile => ({
+      ...raw,
+      uid: raw.uid || 'usr_farm',
+      name: raw.name || 'খামারী',
+      farmName: raw.farmName || 'পোল্ট্রি ফার্ম',
+      phone: raw.phone || '০১৭০০-০০০০০০',
+      location: raw.location || 'বাংলাদেশ',
+      capacity: Number(raw.capacity) || 1000,
+      birdType: raw.birdType || 'ব্রয়লার',
+      registrationDate: raw.registrationDate || new Date().toISOString().split('T')[0]
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         setFirebaseUser(fbUser);
         setIsFirebaseConnected(true);
 
+        const cachedProfile = PoultryStorageService.getUserById(fbUser.uid);
+        if (cachedProfile) {
+          setCurrentUser(normalizeProfile(cachedProfile));
+          PoultryStorageService.setActiveUserId(cachedProfile.uid);
+          finishBoot();
+        }
+
         try {
           const userDocRef = doc(db, 'users', fbUser.uid);
-          const snap = await getDoc(userDocRef);
+          const snap: any = await Promise.race([
+            getDoc(userDocRef),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500))
+          ]);
           let profile: UserProfile;
 
-          if (snap.exists()) {
-            profile = snap.data() as UserProfile;
+          if (snap && typeof snap.exists === 'function' && snap.exists()) {
+            profile = normalizeProfile(snap.data() as UserProfile);
           } else {
             const displayName = fbUser.displayName || fbUser.email?.split('@')[0] || 'খামারী';
-            profile = {
+            profile = normalizeProfile({
               uid: fbUser.uid,
               email: fbUser.email || '',
               name: displayName,
@@ -95,21 +136,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               capacity: 1000,
               birdType: 'ব্রয়লার',
               registrationDate: new Date().toISOString().split('T')[0]
-            };
-            await setDoc(userDocRef, profile);
+            });
+            setDoc(userDocRef, profile).catch(() => {});
           }
 
           PoultryStorageService.saveUser(profile);
           PoultryStorageService.setActiveUserId(profile.uid);
-
-          // CRITICAL: Pull all previous batches and data from Cloud Firestore BEFORE setting state!
-          await PoultryStorageService.syncUserFromFirestore(profile.uid);
-
           setCurrentUser(profile);
           setSyncVersion((v) => v + 1);
+          finishBoot();
+
+          // Sync cloud batches in background without blocking UI
+          PoultryStorageService.syncUserFromFirestore(profile.uid)
+            .then((synced) => {
+              if (synced) setSyncVersion((v) => v + 1);
+            })
+            .catch(() => {});
         } catch (err) {
           console.warn('Firestore profile sync error:', err);
-          const localProfile: UserProfile = {
+          const localProfile = normalizeProfile({
             uid: fbUser.uid,
             email: fbUser.email || '',
             name: fbUser.displayName || 'খামারী',
@@ -119,75 +164,94 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             capacity: 1000,
             birdType: 'ব্রয়লার',
             registrationDate: new Date().toISOString().split('T')[0]
-          };
+          });
           PoultryStorageService.saveUser(localProfile);
           PoultryStorageService.setActiveUserId(fbUser.uid);
-          await PoultryStorageService.syncUserFromFirestore(fbUser.uid);
           setCurrentUser(localProfile);
           setSyncVersion((v) => v + 1);
+          finishBoot();
         }
       } else {
         setFirebaseUser(null);
-        // Fallback to active local session or default demo profile (Hasan)
         const activeUid = PoultryStorageService.getActiveUserId();
         if (activeUid && !isDemoUid(activeUid)) {
           let user = PoultryStorageService.getUserById(activeUid);
-          if (!user) {
+          if (user) {
+            const safeUser = normalizeProfile(user);
+            setCurrentUser(safeUser);
+            setSyncVersion((v) => v + 1);
+            finishBoot();
+
+            PoultryStorageService.syncUserFromFirestore(safeUser.uid)
+              .then((synced) => {
+                if (synced) setSyncVersion((v) => v + 1);
+              })
+              .catch(() => {});
+          } else {
             try {
-              const uSnap = await getDoc(doc(db, 'users', activeUid));
-              if (uSnap.exists()) {
-                user = uSnap.data() as UserProfile;
+              const uSnap: any = await Promise.race([
+                getDoc(doc(db, 'users', activeUid)),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500))
+              ]);
+              if (uSnap && typeof uSnap.exists === 'function' && uSnap.exists()) {
+                user = normalizeProfile(uSnap.data() as UserProfile);
                 PoultryStorageService.saveUser(user);
               }
             } catch (e) {
               console.warn('Fetch active user error:', e);
             }
-          }
-          if (user) {
-            await PoultryStorageService.syncUserFromFirestore(user.uid);
-            setCurrentUser(user);
-            setSyncVersion((v) => v + 1);
-          } else {
-            const defaultDemo = DEMO_PROFILES[0];
-            setCurrentUser(defaultDemo);
-            PoultryStorageService.setActiveUserId(defaultDemo.uid);
+
+            if (user) {
+              setCurrentUser(normalizeProfile(user));
+              setSyncVersion((v) => v + 1);
+              finishBoot();
+              PoultryStorageService.syncUserFromFirestore(user.uid)
+                .then((synced) => {
+                  if (synced) setSyncVersion((v) => v + 1);
+                })
+                .catch(() => {});
+            } else {
+              const defaultDemo = DEMO_PROFILES[0];
+              setCurrentUser(defaultDemo);
+              PoultryStorageService.setActiveUserId(defaultDemo.uid);
+              finishBoot();
+            }
           }
         } else {
           const defaultDemo = DEMO_PROFILES[0];
           setCurrentUser(defaultDemo);
           PoultryStorageService.setActiveUserId(defaultDemo.uid);
+          finishBoot();
         }
       }
-      setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(bootFailsafeTimer);
+      unsubscribe();
+    };
   }, []);
 
   // Google Login via Firebase Popup
   const loginWithGoogle = async (): Promise<boolean> => {
-    setIsLoading(true);
     try {
       const user = await firebaseSignInWithGoogle();
       if (!user) {
-        setIsLoading(false);
         return false;
       }
       setAuthPromptReason(null);
+      setIsAuthModalOpen(false);
       return true;
     } catch (err: any) {
-      setIsLoading(false);
       console.error('Google login failed:', err);
       throw err;
     }
   };
 
   const login = async (identifier: string, password?: string): Promise<boolean> => {
-    setIsLoading(true);
-    const { cleanInput, authEmail, displayPhone, isPhone } = normalizeIdentifier(identifier);
+    const { cleanInput, authEmail, isPhone } = normalizeIdentifier(identifier);
 
     if (!password || password.length < 6) {
-      setIsLoading(false);
       throw new Error('পাসওয়ার্ডটি অন্তত ৬ অক্ষরের হতে হবে।');
     }
 
@@ -210,7 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userDocRef = doc(db, 'users', uidToCheck);
           const userSnap: any = await Promise.race([
             getDoc(userDocRef),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 4500))
           ]);
           if (userSnap && typeof userSnap.exists === 'function' && userSnap.exists()) {
             matchedProfile = userSnap.data() as UserProfile;
@@ -224,7 +288,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 3. User account MUST exist! Never auto-create during login
     if (!matchedProfile) {
-      setIsLoading(false);
       throw new Error(
         'এই মোবাইল নম্বর বা ইমেইল দিয়ে কোনো একাউন্ট পাওয়া যায়নি! অনুগ্রহ করে প্রথমে "নতুন একাউন্ট খুলুন" ট্যাবে গিয়ে নিবন্ধন করুন।'
       );
@@ -238,32 +301,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (matchedProfile as any).password === passHash;
 
     if (matchedProfile.passwordHash && !isPasswordValid) {
-      setIsLoading(false);
       throw new Error('ভুল পাসওয়ার্ড! অনুগ্রহ করে আপনার সঠিক পাসওয়ার্ড লিখুন।');
     }
 
-    // Always keep passwordHash synced to passHash for security
-    matchedProfile.passwordHash = passHash;
+    const safeProfile: UserProfile = {
+      ...matchedProfile,
+      uid: matchedProfile.uid || deterministicUid,
+      name: matchedProfile.name || 'খামারী',
+      farmName: matchedProfile.farmName || 'পোল্ট্রি ফার্ম',
+      phone: matchedProfile.phone || (isPhone ? identifier.trim() : '০১৭০০-০০০০০০'),
+      location: matchedProfile.location || 'বাংলাদেশ',
+      capacity: Number(matchedProfile.capacity) || 1000,
+      birdType: matchedProfile.birdType || 'ব্রয়লার',
+      registrationDate: matchedProfile.registrationDate || new Date().toISOString().split('T')[0],
+      passwordHash: passHash
+    };
 
-    // 5. Activate authenticated session
-    PoultryStorageService.saveUser(matchedProfile);
-    PoultryStorageService.setActiveUserId(matchedProfile.uid);
-    setCurrentUser(matchedProfile);
+    // 5. Activate authenticated session smoothly without unmounting the UI tree
+    PoultryStorageService.saveUser(safeProfile);
+    PoultryStorageService.setActiveUserId(safeProfile.uid);
+    setCurrentUser(safeProfile);
     setSyncVersion((v) => v + 1);
     setAuthPromptReason(null);
-    setIsLoading(false);
+    setIsAuthModalOpen(false);
 
-    // 6. Background sync for batches & subcollections
-    const activeUid = matchedProfile.uid;
-    const finalProfile = matchedProfile;
+    // 6. Independent background sync (never block UI or abort batch sync if profile write warns)
+    const activeUid = safeProfile.uid;
     setTimeout(() => {
-      setDoc(doc(db, 'users', activeUid), cleanForFirestore(finalProfile), { merge: true })
-        .then(() => PoultryStorageService.syncUserFromFirestore(activeUid))
+      setDoc(doc(db, 'users', activeUid), cleanForFirestore(safeProfile), { merge: true }).catch(() => {});
+      PoultryStorageService.syncUserFromFirestore(activeUid)
         .then((synced) => {
           if (synced) setSyncVersion((v) => v + 1);
         })
         .catch((e) => console.warn('Background sync error:', e));
-    }, 0);
+    }, 50);
 
     return true;
   };
@@ -272,11 +343,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     profileData: Omit<UserProfile, 'uid' | 'registrationDate'>,
     password?: string
   ): Promise<boolean> => {
-    setIsLoading(true);
     const { isPhone, cleanInput, authEmail, displayPhone } = normalizeIdentifier(profileData.email);
 
     if (!password || password.length < 6) {
-      setIsLoading(false);
       throw new Error('পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।');
     }
 
@@ -286,7 +355,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 1. Strict uniqueness check across local registered profiles
     const isTakenLocally = PoultryStorageService.isEmailOrPhoneTaken(cleanInput, profileData.phone);
     if (isTakenLocally) {
-      setIsLoading(false);
       throw new Error(
         'এই জিমেইল অথবা মোবাইল নম্বর দিয়ে ইতোমধ্যে একটি একাউন্ট খোলা আছে! একটি জিমেইল বা মোবাইল নম্বর দিয়ে কেবল ১ বারই একাউন্ট খোলা যাবে। অনুগ্রহ করে আপনার পূর্বের একাউন্টে লগইন করুন।'
       );
@@ -297,10 +365,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userDocRef = doc(db, 'users', uid);
       const existingDoc: any = await Promise.race([
         getDoc(userDocRef),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200))
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500))
       ]);
       if (existingDoc && typeof existingDoc.exists === 'function' && existingDoc.exists()) {
-        setIsLoading(false);
         throw new Error(
           'এই জিমেইল অথবা মোবাইল নম্বর দিয়ে ইতোমধ্যে একটি একাউন্ট খোলা আছে! একটি জিমেইল বা মোবাইল নম্বর দিয়ে কেবল ১ বারই একাউন্ট খোলা যাবে। অনুগ্রহ করে আপনার পূর্বের একাউন্টে লগইন করুন।'
         );
@@ -314,26 +381,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const savedProfile: UserProfile = {
       ...profileData,
       uid,
+      name: profileData.name || 'খামারী',
+      farmName: profileData.farmName || 'পোল্ট্রি ফার্ম',
       email: isPhone ? authEmail : cleanInput,
       phone: profileData.phone || (isPhone ? displayPhone : '০১৭০০-০০০০০০'),
       registrationDate: new Date().toISOString().split('T')[0],
       passwordHash: passHash
     };
 
-    // Activate immediately on this device
+    // Activate immediately on this device without unmounting MainApp
     PoultryStorageService.saveUser(savedProfile);
     PoultryStorageService.setActiveUserId(uid);
     setCurrentUser(savedProfile);
     setSyncVersion((v) => v + 1);
     setAuthPromptReason(null);
-    setIsLoading(false);
+    setIsAuthModalOpen(false);
 
     // Async push to Cloud Firestore in background
     setTimeout(() => {
-      setDoc(doc(db, 'users', uid), cleanForFirestore(savedProfile), { merge: true })
-        .then(() => PoultryStorageService.syncUserFromFirestore(uid))
-        .catch((err) => console.warn('Firestore setDoc user error:', err));
-    }, 0);
+      setDoc(doc(db, 'users', uid), cleanForFirestore(savedProfile), { merge: true }).catch((err) =>
+        console.warn('Firestore setDoc user error:', err)
+      );
+    }, 50);
 
     return true;
   };
@@ -357,10 +426,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const switchUser = (uid: string) => {
-    const user = PoultryStorageService.getUserById(uid);
-    if (user) {
-      setCurrentUser(user);
-      PoultryStorageService.setActiveUserId(user.uid);
+    // Strictly allow switching ONLY between public Demo preview profiles
+    if (!isDemoUid(uid)) {
+      console.warn('Blocked attempt to switch to non-demo user account:', uid);
+      return;
+    }
+    const demoUser = DEMO_PROFILES.find((p) => p.uid === uid);
+    if (demoUser) {
+      setCurrentUser(demoUser);
+      PoultryStorageService.setActiveUserId(demoUser.uid);
     }
   };
 
@@ -406,7 +480,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         switchUser,
         switchToDemo,
         updateProfile,
-        allDemoUsers: PoultryStorageService.getUsers()
+        allDemoUsers: DEMO_PROFILES
       }}
     >
       {children}

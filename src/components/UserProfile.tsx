@@ -38,6 +38,7 @@ import { Batch, BirdType, UserProfile as UserProfileType } from '../types';
 import { formatBnDate, formatTaka, formatWeight, toBnNumber } from '../utils/formatters';
 import { PoultryStorageService } from '../services/storage';
 import { ArchivedBatchInspectionModal } from './ArchivedBatchInspectionModal';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface UserProfileProps {
   batches?: Batch[];
@@ -58,7 +59,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   onOpenNewBatchModal,
   onOpenAdminPanel
 }) => {
-  const { currentUser, updateProfile, allDemoUsers, switchUser } = useAuth();
+  const { currentUser, updateProfile } = useAuth();
+  const { confirmAction } = useConfirm();
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
@@ -186,7 +188,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-slate-100">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black text-2xl sm:text-3xl flex items-center justify-center shadow-lg shadow-emerald-600/30 ring-4 ring-emerald-50">
-              {currentUser.name.charAt(0)}
+              {(currentUser.name || 'খ').charAt(0)}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -762,8 +764,15 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
                       {onRestoreBatch && (
                         <button
-                          onClick={() => {
-                            if (confirm(`আপনি কি "${batch.batchNumber}" পুনরায় সক্রিয় করতে চান?`)) {
+                          type="button"
+                          onClick={async () => {
+                            const ok = await confirmAction({
+                              title: 'ব্যাচ পুনরায় সক্রিয় করবেন?',
+                              message: `আপনি কি "${batch.batchNumber}" পুনরায় চলমান ব্যাচ হিসেবে সক্রিয় করতে চান?`,
+                              confirmLabel: 'হ্যাঁ, সক্রিয় করুন',
+                              tone: 'warning'
+                            });
+                            if (ok) {
                               onRestoreBatch(batch.id);
                             }
                           }}
@@ -782,70 +791,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({
         )}
       </div>
 
-      {/* Multi-Tenancy & Isolation Verification Showcase */}
+      {/* Multi-Tenancy & Account Isolation Info */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-2 mb-3">
           <ShieldCheck className="w-5 h-5 text-emerald-600" />
           <h2 className="font-bold text-slate-900 text-base">
-            মাল্টি-টেন্যান্সি ও ডাটাবেজ নিরাপত্তা আর্কিটেকচার (Multi-Tenancy Isolation)
+            অ্যাকাউন্ট সুরক্ষা ও ডাটা আইসোলেশন (Account Security)
           </h2>
         </div>
 
         <p className="text-xs text-slate-600 leading-relaxed">
-          প্রতিটি নিবন্ধিত খামারীর ডাটা সম্পূর্ণ আলাদা পার্টিশনে সংরক্ষিত। কোনো খামারী অন্য কারো ব্যাচ, খরচ, ওষুধ বা বিক্রির রেকর্ড দেখার অনুমতি পায় না।
+          প্রতিটি নিবন্ধিত খামারীর সকল ব্যাচ, খরচ, ওষুধ ও বিক্রির তথ্য সম্পূর্ণ আলাদা ও সুরক্ষিত পার্টিশনে সংরক্ষিত থাকে। পাসওয়ার্ড ছাড়া অন্য কোনো ব্যবহারকারী আপনার আইডিতে প্রবেশ বা সুইচ করতে পারবে না।
         </p>
-
-        {/* Live Tenant Switcher Box */}
-        <div className="mt-5 p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-              <Repeat className="w-4 h-4 text-emerald-700" />
-              আইসোলেশন পরীক্ষা করুন (অন্য খামারীতে সুইচ করুন):
-            </span>
-            <span className="text-[11px] text-emerald-700 font-semibold">
-              বর্তমান সক্রিয়: {currentUser.name}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {allDemoUsers.map((user) => {
-              const isActive = user.uid === currentUser.uid;
-              return (
-                <div
-                  key={user.uid}
-                  className={`p-3 rounded-xl border transition-all flex items-center justify-between ${
-                    isActive
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
-                  }`}
-                >
-                  <div>
-                    <p className="text-xs font-bold">{user.name}</p>
-                    <p className={`text-[10px] ${isActive ? 'text-emerald-100' : 'text-slate-500'}`}>
-                      {user.farmName} • {user.location}
-                    </p>
-                    <p className={`text-[9px] font-mono mt-0.5 ${isActive ? 'text-emerald-200' : 'text-slate-400'}`}>
-                      আইডি: {user.uid}
-                    </p>
-                  </div>
-
-                  {isActive ? (
-                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">
-                      লগইনকৃত
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => switchUser(user.uid)}
-                      className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold"
-                    >
-                      সুইচ করুন
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Inspect Archived Batch Modal */}

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Batch, ExpenseCategory, ExpenseRecord, DuePaymentEntry } from '../types';
 import { formatBnDate, formatTaka, getTodayDateString, toBnNumber } from '../utils/formatters';
+import { useConfirm } from '../context/ConfirmContext';
 
 const CATEGORIES: ExpenseCategory[] = [
   'বাচ্চা ক্রয়',
@@ -58,6 +59,7 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
   onDeleteExpense,
   onRecordDuePayment
 }) => {
+  const { confirmAction } = useConfirm();
   const [showAddModal, setShowAddModal] = useState(false);
   const [expandedPaymentHistoryId, setExpandedPaymentHistoryId] = useState<string | null>(null);
 
@@ -434,9 +436,9 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs w-full min-w-0">
         {/* Payment status filter tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto min-w-0">
           <button
             onClick={() => setPaymentFilter('all')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors whitespace-nowrap ${
@@ -489,12 +491,12 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto min-w-0">
           {/* Category Dropdown */}
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="text-xs font-semibold px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:ring-2 focus:ring-rose-500 outline-none"
+            className="text-xs font-semibold px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:ring-2 focus:ring-rose-500 outline-none flex-1 sm:flex-initial min-w-[120px]"
           >
             <option value="all">সব ক্যাটাগরি</option>
             {CATEGORIES.map((cat) => (
@@ -505,7 +507,7 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
           </select>
 
           {/* Search */}
-          <div className="relative w-44 sm:w-56">
+          <div className="relative flex-1 sm:flex-initial sm:w-56 min-w-[140px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -685,8 +687,15 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
 
                       {/* Delete */}
                       <button
-                        onClick={() => {
-                          if (confirm(`আপনি কি এই রেকর্ডটি (${formatTaka(exp.amount)}) মুছে ফেলতে চান?`)) {
+                        type="button"
+                        onClick={async () => {
+                          const ok = await confirmAction({
+                            title: 'খরচের রেকর্ড মুছে ফেলবেন?',
+                            message: `আপনি কি এই খরচের রেকর্ডটি (${formatTaka(exp.amount)}) মুছে ফেলতে চান?`,
+                            confirmLabel: 'হ্যাঁ, মুছে ফেলুন',
+                            tone: 'danger'
+                          });
+                          if (ok) {
                             onDeleteExpense(exp.id);
                           }
                         }}

@@ -104,16 +104,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-emerald-100 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-18">
+    <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-emerald-100 shadow-xs overflow-x-clip">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-2 h-15 sm:h-18">
           
           {/* Logo & Farm Branding with Secret 3-Tap gesture */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button
               type="button"
               onClick={handleLogoTap}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl overflow-hidden shadow-md shadow-emerald-600/20 ring-2 ring-emerald-200 bg-emerald-700 shrink-0 cursor-pointer active:scale-95 transition-transform"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl overflow-hidden shadow-md shadow-emerald-600/20 ring-2 ring-emerald-200 bg-emerald-700 shrink-0 cursor-pointer active:scale-95 transition-transform"
               title="FarmHisab Logo"
             >
               <img
@@ -122,26 +122,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="w-full h-full object-cover select-none pointer-events-none"
               />
             </button>
-            <div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <span className="text-base sm:text-2xl font-black tracking-tight text-slate-900 truncate">
                   Farm<span className="text-emerald-600">Hisab</span>
                 </span>
-                <span className="text-xs sm:text-sm font-bold text-slate-500">
+                <span className="hidden sm:inline text-sm font-bold text-slate-500">
                   (ফার্মহিসাব)
                 </span>
                 {isGuest ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
-                    👀 ডেমো মোড
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs whitespace-nowrap">
+                    ডেমো
                   </span>
                 ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
                     <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-600" />
                     নিরাপদ ক্লাউড
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 font-medium hidden sm:block">
+              <p className="text-xs text-slate-500 font-medium hidden sm:block truncate">
                 {isGuest
                   ? `${currentUser?.farmName || 'ডেমো খামার'} (ডেমো প্রিভিউ - শুধুমাত্র দেখার জন্য)`
                   : `${currentUser?.farmName || 'পোল্ট্রি ফার্মিং সফটওয়্যার'} • ${currentUser?.location || 'বাংলাদেশ'}`}
@@ -150,7 +150,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* User Bar & Multi-tenant actions */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {isGuest ? (
               <>
                 {/* Demo Switcher for exploring different demo profiles */}
@@ -195,10 +195,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={onOpenAuthModal}
-                  className="flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all active:scale-95"
+                  className="flex items-center gap-1.5 px-2.5 sm:px-4 py-2 text-xs font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all active:scale-95 whitespace-nowrap"
                 >
-                  <UserCheck className="w-4 h-4" />
-                  <span>একাউন্ট তৈরি / লগইন</span>
+                  <UserCheck className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">একাউন্ট তৈরি / লগইন</span>
+                  <span className="sm:hidden">লগইন</span>
                 </button>
 
                 {/* New Batch button (will trigger auth gate) */}
@@ -218,10 +219,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('expenses')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-xs font-black transition-all shadow-2xs active:scale-95"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-xs font-black transition-all shadow-2xs active:scale-95 whitespace-nowrap"
                     title="বাকি ও জমার খাতা দেখতে ক্লিক করুন"
                   >
-                    <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+                    <span className="w-2 h-2 rounded-full bg-rose-600" />
                     <span>এখন বাকি: {formatTaka(remainingDue)}</span>
                   </button>
                 )}
@@ -233,14 +234,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                   title="আপনার প্রোফাইল দেখতে ক্লিক করুন"
                 >
                   <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                    {currentUser.name.charAt(0)}
+                    {(currentUser.name || 'খ').charAt(0)}
                   </div>
                   <div className="leading-tight">
                     <p className="text-xs font-bold text-slate-800 truncate max-w-[130px]">
-                      {currentUser.name}
+                      {currentUser.name || 'খামারী'}
                     </p>
                     <p className="text-[10px] text-slate-500 font-mono">
-                      আইডি: {currentUser.uid.length > 12 ? `${currentUser.uid.substring(0, 10)}...` : currentUser.uid}
+                      আইডি: {(currentUser.uid || '').length > 12 ? `${(currentUser.uid || '').substring(0, 10)}...` : currentUser.uid}
                     </p>
                   </div>
                 </div>
@@ -249,10 +250,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={switchToDemo}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl text-slate-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors shadow-2xs"
+                  className="flex items-center gap-1 px-1.5 sm:px-2.5 py-1.5 text-[10px] sm:text-xs font-semibold rounded-xl text-slate-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors shadow-2xs whitespace-nowrap"
                   title="ডেমো খামারের হিসাব দেখতে ক্লিক করুন"
                 >
-                  <Repeat className="w-3.5 h-3.5 text-amber-600" />
+                  <Repeat className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span className="hidden sm:inline">ডেমো খামার দেখুন</span>
                   <span className="sm:hidden">ডেমো</span>
                 </button>
@@ -262,14 +263,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveTab('users_directory')}
-                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-xl border transition-all shadow-xs ${
+                    className={`flex items-center gap-1 px-1.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-bold rounded-xl border transition-all shadow-xs whitespace-nowrap ${
                       activeTab === 'users_directory'
                         ? 'bg-amber-600 text-white border-amber-600'
                         : 'bg-amber-100/80 hover:bg-amber-200/90 text-amber-900 border-amber-300'
                     }`}
                     title="খামারী তালিকা, ফোন নম্বর ও বাল্ক SMS পাঠাতে অ্যাডমিন প্যানেল"
                   >
-                    <Users className="w-3.5 h-3.5 text-amber-700" />
+                    <Users className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                     <span className="hidden md:inline">অ্যাডমিন প্যানেল</span>
                     <span className="md:hidden">অ্যাডমিন</span>
                   </button>
@@ -278,16 +279,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {/* New Batch button */}
                 <button
                   onClick={onOpenNewBatchModal}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all active:scale-95"
+                  className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all active:scale-95 whitespace-nowrap"
+                  title="নতুন ব্যাচ শুরু করুন"
                 >
-                  <PlusCircle className="w-4 h-4" />
+                  <PlusCircle className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">নতুন ব্যাচ</span>
                 </button>
 
                 {/* Logout button */}
                 <button
                   onClick={logout}
-                  className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                  className="p-1.5 sm:p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
                   title="লগআউট (ডেমো মোডে ফিরুন)"
                 >
                   <LogOut className="w-4 h-4" />
@@ -305,7 +307,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Tab Navigation Menu */}
-        <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 scrollbar-none border-t border-slate-100">
+        <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 scrollbar-none border-t border-slate-100 w-full min-w-0">
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
