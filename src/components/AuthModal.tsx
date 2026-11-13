@@ -94,28 +94,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-8 shadow-2xl border border-slate-100 relative max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-slate-900/70 overflow-y-auto overscroll-contain flex items-start sm:items-center justify-center p-3 sm:p-4 pt-4 pb-28 sm:py-6">
+      <div className="bg-white rounded-3xl max-w-md w-full p-4 sm:p-8 shadow-2xl border border-slate-100 relative my-0 sm:my-auto">
         <button
+          type="button"
           onClick={handleClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 text-lg font-bold"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-base font-bold"
         >
           ✕
         </button>
 
-        <div className="text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-lg shadow-emerald-600/20 ring-2 ring-emerald-200 mx-auto mb-3 bg-emerald-700">
+        <div className="text-center mb-3.5 sm:mb-6">
+          <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shadow-md shadow-emerald-600/20 ring-2 ring-emerald-200 mx-auto mb-2 sm:mb-3 bg-emerald-700">
             <img
               src="/assets/aistudio/Gemini_Generated_Image_gm2r1igm2r1igm2r_1d927ad2.jpg"
               alt="FarmHisab Logo"
               className="w-full h-full object-cover"
             />
           </div>
-          <h2 className="text-xl font-black text-slate-900">
-            {isRegister ? 'FarmHisab (ফার্মহিসাব) নতুন একাউন্ট' : 'FarmHisab (ফার্মহিসাব) এ লগইন'}
+          <h2 className="text-lg sm:text-xl font-black text-slate-900 pr-6 sm:pr-0">
+            {isRegister ? 'FarmHisab নতুন একাউন্ট' : 'FarmHisab এ লগইন'}
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            ফায়ারবেস কনসোল অথেনটিকেশন ও ক্লাউড ফায়ারস্টোর সংযুক্ত
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+            ফায়ারবেস অথেনটিকেশন ও ক্লাউড ফায়ারস্টোর সংযুক্ত
           </p>
         </div>
 
@@ -187,11 +188,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               )}
               <input
                 type={authMethod === 'phone' ? 'tel' : 'email'}
+                inputMode={authMethod === 'phone' ? 'tel' : 'email'}
+                autoComplete={authMethod === 'phone' ? 'tel' : 'email'}
                 required
                 placeholder={authMethod === 'phone' ? 'যেমন: ০১৭১২-৩৪৫৬৭৮' : 'যেমন: farmer@example.com'}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
               />
             </div>
             {authMethod === 'phone' && (
@@ -213,14 +216,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               </button>
             </div>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 type={showPassword ? 'text' : 'password'}
+                autoComplete={isRegister ? 'new-password' : 'current-password'}
                 required
                 placeholder="কমপক্ষে ৬ অক্ষর বা সংখ্যা"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-10 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full pl-9 pr-10 py-2.5 text-base sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
               />
             </div>
           </div>
@@ -230,14 +234,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">আপনার নাম *</label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
                     type="text"
+                    autoComplete="name"
                     required
                     placeholder="নাম"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   />
                 </div>
               </div>
@@ -245,14 +250,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">খামারের নাম *</label>
                 <div className="relative">
-                  <Building className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <Building className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
                     type="text"
                     required
                     placeholder="খামারের নাম"
                     value={farmName}
                     onChange={(e) => setFarmName(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   />
                 </div>
               </div>
@@ -264,10 +269,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   </label>
                   <input
                     type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
                     placeholder="০১৭..."
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2.5 text-base sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   />
                 </div>
 
@@ -278,7 +285,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                     placeholder="যেমন: ময়মনসিংহ"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2.5 text-base sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   />
                 </div>
               </div>
@@ -288,10 +295,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   <label className="block text-xs font-bold text-slate-700 mb-1">শেড ক্যাপাসিটি</label>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min="50"
                     value={capacity}
                     onChange={(e) => setCapacity(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2.5 text-base sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   />
                 </div>
 
@@ -300,7 +308,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   <select
                     value={birdType}
                     onChange={(e) => setBirdType(e.target.value as BirdType)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                    className="w-full px-3 py-2.5 text-base sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   >
                     <option value="ব্রয়লার">ব্রয়লার</option>
                     <option value="সোনালী">সোনালী</option>
@@ -330,6 +338,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
         <div className="mt-4 pt-4 border-t border-slate-100 text-center">
           <button
+            type="button"
             onClick={() => {
               setIsRegister(!isRegister);
               setError('');
