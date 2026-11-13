@@ -6,15 +6,19 @@ import { getTodayDateString, toBnNumber } from '../utils/formatters';
 interface NewBatchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveBatch: (batchData: Omit<Batch, 'id' | 'userId' | 'createdAt'>) => void;
+  onSaveBatch: (batchData: Omit<Batch, 'id' | 'userId' | 'createdAt'>, routineSource?: string) => void;
   existingBatchCount: number;
+  previousBatches?: Batch[];
+  hasSavedTemplate?: boolean;
 }
 
 export const NewBatchModal: React.FC<NewBatchModalProps> = ({
   isOpen,
   onClose,
   onSaveBatch,
-  existingBatchCount
+  existingBatchCount,
+  previousBatches = [],
+  hasSavedTemplate = false
 }) => {
   const [batchNumber, setBatchNumber] = useState(`Batch ${existingBatchCount + 1 > 9 ? existingBatchCount + 1 : '0' + (existingBatchCount + 1)} - Broiler`);
   const [batchName, setBatchName] = useState('কপ ৫০০ ব্রয়লার লট');
@@ -28,6 +32,7 @@ export const NewBatchModal: React.FC<NewBatchModalProps> = ({
   const [targetWeightInput, setTargetWeightInput] = useState('2.5');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'grams'>('kg');
   const [notes, setNotes] = useState('');
+  const [routineSource, setRoutineSource] = useState<string>('__auto__');
 
   if (!isOpen) return null;
 
@@ -40,18 +45,21 @@ export const NewBatchModal: React.FC<NewBatchModalProps> = ({
     const chicksCount = parseInt(initialChicks, 10) || 100;
     const chickPrice = parseFloat(chickPricePerUnit) || 0;
 
-    onSaveBatch({
-      batchNumber: batchNumber.trim(),
-      batchName: batchName.trim(),
-      startDate,
-      birdType,
-      initialChicks: chicksCount,
-      chickPricePerUnit: chickPrice,
-      supplierName: supplierName.trim(),
-      targetWeightGrams: targetGrams || 2200,
-      status: 'active',
-      notes: notes.trim()
-    });
+    onSaveBatch(
+      {
+        batchNumber: batchNumber.trim(),
+        batchName: batchName.trim(),
+        startDate,
+        birdType,
+        initialChicks: chicksCount,
+        chickPricePerUnit: chickPrice,
+        supplierName: supplierName.trim(),
+        targetWeightGrams: targetGrams || 2200,
+        status: 'active',
+        notes: notes.trim()
+      },
+      routineSource
+    );
 
     onClose();
   };
@@ -260,6 +268,33 @@ export const NewBatchModal: React.FC<NewBatchModalProps> = ({
               />
             </div>
           </div>
+
+          {/* 6. Routine Medication Inheritance for New Batch */}
+          {(previousBatches.length > 0 || hasSavedTemplate) && (
+            <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200/80 space-y-2">
+              <label className="block text-xs font-bold text-emerald-950">
+                নিয়মিত ওষুধের রুটিন (আগের ব্যাচের ওষুধ অটোমেটিক যুক্ত হবে)
+              </label>
+              <select
+                value={routineSource}
+                onChange={(e) => setRoutineSource(e.target.value)}
+                className="w-full text-xs font-semibold px-3 py-2 border border-emerald-300 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none"
+              >
+                <option value="__auto__">
+                  স্বয়ংক্রিয় রুটিন কপি (আগের ব্যাচ ও সেভ করা নিয়মিত ওষুধসমূহ)
+                </option>
+                {previousBatches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    এই ব্যাচের ওষুধ আনুন: {b.batchName} ({b.batchNumber})
+                  </option>
+                ))}
+                <option value="__default__">আদর্শ ব্রয়লার ভ্যাকসিন ও ভিটামিন সূচি (নতুন ডিফল্ট)</option>
+              </select>
+              <p className="text-[11px] text-emerald-800">
+                মুরগি বিক্রি না হওয়া পর্যন্ত নিয়মিত যে ওষুধগুলো ব্যবহার করেন, সেগুলো নতুন ব্যাচে সাথে সাথে পেয়ে যাবেন — পুনরায় লিখতে হবে না।
+              </p>
+            </div>
+          )}
 
           <div className="pt-2 flex items-center justify-end gap-2.5">
             <button

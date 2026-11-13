@@ -17,6 +17,7 @@ import { PoultryStorageService } from './services/storage';
 import {
   Batch,
   BatchSummary,
+  DiseaseOutbreakRecord,
   ExpenseRecord,
   GrowthRecord,
   MedicineScheduleItem,
@@ -83,6 +84,7 @@ const MainApp: React.FC = () => {
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [growthRecords, setGrowthRecords] = useState<GrowthRecord[]>([]);
   const [medicines, setMedicines] = useState<MedicineScheduleItem[]>([]);
+  const [diseaseLogs, setDiseaseLogs] = useState<DiseaseOutbreakRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [summary, setSummary] = useState<BatchSummary | null>(null);
@@ -102,6 +104,7 @@ const MainApp: React.FC = () => {
       setActiveBatchId(null);
       setGrowthRecords([]);
       setMedicines([]);
+      setDiseaseLogs([]);
       setExpenses([]);
       setSales([]);
       setSummary(null);
@@ -163,6 +166,7 @@ const MainApp: React.FC = () => {
     if (!currentUser || !activeBatchId) {
       setGrowthRecords([]);
       setMedicines([]);
+      setDiseaseLogs([]);
       setExpenses([]);
       setSales([]);
       setSummary(null);
@@ -175,12 +179,14 @@ const MainApp: React.FC = () => {
 
       const g = PoultryStorageService.getGrowthRecords(currentUser.uid, activeBatchId);
       const m = PoultryStorageService.getMedicineSchedule(currentUser.uid, activeBatchId);
+      const dl = PoultryStorageService.getDiseaseLogs(currentUser.uid, activeBatchId);
       const e = PoultryStorageService.getExpenses(currentUser.uid, activeBatchId);
       const s = PoultryStorageService.getSales(currentUser.uid, activeBatchId);
       const sum = PoultryStorageService.calculateBatchSummary(currentUser.uid, currentBatch);
 
       setGrowthRecords(g);
       setMedicines(m);
+      setDiseaseLogs(dl);
       setExpenses(e);
       setSales(s);
       setSummary(sum);
@@ -188,7 +194,7 @@ const MainApp: React.FC = () => {
       console.error('Error fetching batch data with RLS check:', err);
       showToast(err.message || 'ডাটা লোড করতে সমস্যা হয়েছে');
     }
-  }, [currentUser, activeBatchId]);
+  }, [currentUser, activeBatchId, syncVersion]);
 
   const activeBatch = batches.find((b) => b.id === activeBatchId) || null;
 
@@ -197,7 +203,7 @@ const MainApp: React.FC = () => {
     setActiveBatchId(batchId);
   };
 
-  const handleCreateBatch = (batchData: Omit<Batch, 'id' | 'userId' | 'createdAt'>) => {
+  const handleCreateBatch = (batchData: Omit<Batch, 'id' | 'userId' | 'createdAt'>, routineSource?: string) => {
     if (!requireAuth('নতুন ব্যাচ তৈরি ও নিজস্ব খামারের হিসাব রাখতে দয়া করে একাউন্ট তৈরি করুন বা লগইন করুন।')) return;
     if (!currentUser) return;
     const newId = `batch_${Date.now()}`;
@@ -208,7 +214,7 @@ const MainApp: React.FC = () => {
       createdAt: new Date().toISOString()
     };
 
-    PoultryStorageService.saveBatch(currentUser.uid, newBatch);
+    PoultryStorageService.saveBatch(currentUser.uid, newBatch, { routineSource });
 
     // Auto-create initial chick expense if price specified
     if (newBatch.initialChicks > 0 && newBatch.chickPricePerUnit > 0) {
@@ -228,7 +234,7 @@ const MainApp: React.FC = () => {
     const updatedBatches = PoultryStorageService.getBatches(currentUser.uid);
     setBatches(updatedBatches);
     setActiveBatchId(newId);
-    showToast('নতুন ব্যাচ সফলভাবে খোলা হয়েছে!');
+    showToast('নতুন ব্যাচ ও নিয়মিত ওষুধের রুটিন সফলভাবে যুক্ত হয়েছে!');
   };
 
   const handleToggleBatchStatus = (batchId: string, currentStatus: 'active' | 'completed') => {
@@ -383,6 +389,77 @@ const MainApp: React.FC = () => {
     showToast('আদর্শ পোল্ট্রি শিডিউল লোড করা হয়েছে');
   };
 
+  const handleSetSlotStatus = (itemIds: string[], targetStatus: 'completed' | 'pending') => {
+    if (!requireAuth('ওষুধের স্ট্যাটাস পরিবর্তন করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
+    if (!currentUser || !activeBatchId) return;
+    const updated = PoultryStorageService.setSlotMedicinesStatus(currentUser.uid, activeBatchId, itemIds, targetStatus);
+    setMedicines(updated);
+    showToast(targetStatus === 'completed' ? 'নির্বাচিত ওষুধগুলো সম্পন্ন হিসেবে মার্ক হয়েছে' : 'স্ট্যাটাস আপডেট হয়েছে');
+  };
+
+  const handleCopyMedicinesToDays = (sourceItems: MedicineScheduleItem[], targetDays: number[]) => {
+    if (!requireAuth('অন্য দিনে ওষুধ কপি করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
+    if (!currentUser || !activeBatchId) return;
+    const updated = PoultryStorageService.copyMedicinesToDays(currentUser.uid, activeBatchId, sourceItems, targetDays);
+    setMedicines(updated);
+    showToast(`${toBnNumber(sourceItems.length)}টি ওষুধ ${toBnNumber(targetDays.length)}টি দিনে পেস্ট করা হয়েছে!`);
+  };
+
+  const handleImportRoutineFromBatch = (sourceBatchId: string, mode: 'replace' | 'merge') => {
+    if (!requireAuth('অন্য ব্যাচ থেকে ওষুধের রুটিন আনতে একাউন্ট তৈরি বা লগইন করুন।')) return;
+    if (!currentUser || !activeBatchId) return;
+    const updated = PoultryStorageService.importRoutineFromBatch(currentUser.uid, activeBatchId, sourceBatchId, mode);
+    setMedicines(updated);
+    showToast('আগের ব্যাচের নিয়মিত ওষুধের রুটিন সফলভাবে লোড হয়েছে!');
+  };
+
+  const handleSaveCurrentAsTemplate = () => {
+    if (!requireAuth('রুটিন টেমপ্লেট সংরক্ষণ করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
+    if (!currentUser) return;
+    const saved = PoultryStorageService.syncBatchMedicinesToTemplate(currentUser.uid, medicines);
+    showToast(`${toBnNumber(saved.length)}টি নিয়মিত ওষুধ নতুন ব্যাচের ডিফল্ট রুটিন হিসেবে সেভ হয়েছে!`);
+  };
+
+  // Disease Outbreak & Emergency Logs
+  const handleAddDiseaseLog = (logData: Omit<DiseaseOutbreakRecord, 'id' | 'batchId' | 'userId' | 'createdAt'>) => {
+    if (!requireAuth('জরুরি রোগ ও চিকিৎসার তথ্য যোগ করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
+    if (!currentUser || !activeBatchId) return;
+    const newLog: DiseaseOutbreakRecord = {
+      ...logData,
+      id: `disease_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      batchId: activeBatchId,
+      userId: currentUser.uid,
+      createdAt: new Date().toISOString()
+    };
+    PoultryStorageService.saveDiseaseLog(currentUser.uid, newLog);
+    setDiseaseLogs(PoultryStorageService.getDiseaseLogs(currentUser.uid, activeBatchId));
+    showToast('জরুরি রোগ ও চিকিৎসার রেকর্ড সংরক্ষিত হয়েছে');
+  };
+
+  const handleUpdateDiseaseLog = (log: DiseaseOutbreakRecord) => {
+    if (!requireAuth()) return;
+    if (!currentUser || !activeBatchId) return;
+    PoultryStorageService.saveDiseaseLog(currentUser.uid, log);
+    setDiseaseLogs(PoultryStorageService.getDiseaseLogs(currentUser.uid, activeBatchId));
+    showToast('রোগ ও চিকিৎসার তথ্য আপডেট হয়েছে');
+  };
+
+  const handleToggleDiseaseStatus = (logId: string) => {
+    if (!requireAuth()) return;
+    if (!currentUser || !activeBatchId) return;
+    const updated = PoultryStorageService.toggleDiseaseStatus(currentUser.uid, activeBatchId, logId);
+    setDiseaseLogs(updated);
+    showToast('চিকিৎসার অবস্থা আপডেট হয়েছে');
+  };
+
+  const handleDeleteDiseaseLog = (logId: string) => {
+    if (!requireAuth()) return;
+    if (!currentUser || !activeBatchId) return;
+    PoultryStorageService.deleteDiseaseLog(currentUser.uid, activeBatchId, logId);
+    setDiseaseLogs(PoultryStorageService.getDiseaseLogs(currentUser.uid, activeBatchId));
+    showToast('রোগের রেকর্ড মুছে ফেলা হয়েছে');
+  };
+
   // Expenses
   const handleAddExpense = (exp: Omit<ExpenseRecord, 'id' | 'batchId' | 'userId'>) => {
     if (!requireAuth('নতুন খরচের ভাউচার যুক্ত করতে একাউন্ট তৈরি বা লগইন করুন।')) return;
@@ -482,6 +559,7 @@ const MainApp: React.FC = () => {
       setActiveBatchId(first.id);
       setGrowthRecords(PoultryStorageService.getGrowthRecords(currentUser.uid, first.id));
       setMedicines(PoultryStorageService.getMedicineSchedule(currentUser.uid, first.id));
+      setDiseaseLogs(PoultryStorageService.getDiseaseLogs(currentUser.uid, first.id));
       setExpenses(PoultryStorageService.getExpenses(currentUser.uid, first.id));
       setSales(PoultryStorageService.getSales(currentUser.uid, first.id));
       setSummary(PoultryStorageService.calculateBatchSummary(currentUser.uid, first));
@@ -596,13 +674,23 @@ const MainApp: React.FC = () => {
         {activeTab === 'medicine' && (
           <MedicineSchedule
             activeBatch={activeBatch}
+            batches={batches}
             medicines={medicines}
+            diseaseLogs={diseaseLogs}
             onToggleStatus={handleToggleMedicine}
+            onSetSlotStatus={handleSetSlotStatus}
             onAddMedicine={handleAddMedicine}
             onUpdateMedicine={handleUpdateMedicine}
             onDeleteMedicine={handleDeleteMedicine}
+            onCopyMedicinesToDays={handleCopyMedicinesToDays}
+            onImportRoutineFromBatch={handleImportRoutineFromBatch}
+            onSaveCurrentAsTemplate={handleSaveCurrentAsTemplate}
             onClearAll={handleClearAllMedicines}
             onResetToDefault={handleResetMedicineSchedule}
+            onAddDiseaseLog={handleAddDiseaseLog}
+            onUpdateDiseaseLog={handleUpdateDiseaseLog}
+            onToggleDiseaseStatus={handleToggleDiseaseStatus}
+            onDeleteDiseaseLog={handleDeleteDiseaseLog}
           />
         )}
 
@@ -784,6 +872,10 @@ const MainApp: React.FC = () => {
         onClose={() => setIsNewBatchOpen(false)}
         onSaveBatch={handleCreateBatch}
         existingBatchCount={batches.length}
+        previousBatches={batches}
+        hasSavedTemplate={
+          currentUser ? PoultryStorageService.getRoutineTemplate(currentUser.uid).length > 0 : false
+        }
       />
 
       <ArchiveBatchModal

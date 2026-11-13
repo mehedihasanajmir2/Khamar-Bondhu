@@ -84,9 +84,45 @@
         "status": { "type": "string", "maxLength": 32 },
         "completedAt": { "type": "string", "maxLength": 64 },
         "notes": { "type": "string", "maxLength": 512 },
-        "isCustom": { "type": "boolean" }
+        "isCustom": { "type": "boolean" },
+        "isRoutineTemplate": { "type": "boolean" }
       },
       "required": ["id", "batchId", "userId", "dayAge", "medicineName", "status"]
+    },
+    "routineTemplateMaster": {
+      "title": "RoutineTemplateMaster",
+      "description": "Reusable account-level default medication schedule propagated across batches",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "items": { "type": "array" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "items", "updatedAt"]
+    },
+    "diseaseOutbreakRecord": {
+      "title": "DiseaseOutbreakRecord",
+      "description": "Sudden disease outbreak and emergency treatment record for a batch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "batchId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 32 },
+        "dayAge": { "type": "number" },
+        "diseaseName": { "type": "string", "maxLength": 128 },
+        "symptoms": { "type": "string", "maxLength": 512 },
+        "emergencyMedicines": { "type": "string", "maxLength": 256 },
+        "dosageAndTiming": { "type": "string", "maxLength": 256 },
+        "durationDays": { "type": "number" },
+        "affectedBirds": { "type": "number" },
+        "status": { "type": "string", "maxLength": 32 },
+        "recoveredDate": { "type": "string", "maxLength": 32 },
+        "notes": { "type": "string", "maxLength": 512 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "batchId", "userId", "date", "dayAge", "diseaseName", "emergencyMedicines", "status"]
     },
     "expenseRecord": {
       "title": "ExpenseRecord",
@@ -134,6 +170,10 @@
       "schema": { "$ref": "#/entities/userProfile" },
       "description": "Stores user farmer profiles"
     },
+    "/users/{userId}/routineTemplates/{templateId}": {
+      "schema": { "$ref": "#/entities/routineTemplateMaster" },
+      "description": "Stores account-level default medication schedule propagated across batches"
+    },
     "/users/{userId}/batches/{batchId}": {
       "schema": { "$ref": "#/entities/batch" },
       "description": "Batches owned by the farmer"
@@ -145,6 +185,10 @@
     "/users/{userId}/batches/{batchId}/medicines/{medicineId}": {
       "schema": { "$ref": "#/entities/medicineScheduleItem" },
       "description": "Medicine and vaccine schedule entries for the batch"
+    },
+    "/users/{userId}/batches/{batchId}/diseaseLogs/{logId}": {
+      "schema": { "$ref": "#/entities/diseaseOutbreakRecord" },
+      "description": "Sudden disease outbreak and emergency treatment records for the batch"
     },
     "/users/{userId}/batches/{batchId}/expenses/{expenseId}": {
       "schema": { "$ref": "#/entities/expenseRecord" },

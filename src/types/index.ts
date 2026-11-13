@@ -94,6 +94,43 @@ export interface MedicineScheduleItem {
   completedAt?: string;
   notes?: string;
   isCustom?: boolean;
+  isRoutineTemplate?: boolean; // মুরগি বিক্রি পর্যন্ত নিয়মিত রুটিন হলে নতুন ব্যাচে স্বয়ংক্রিয়ভাবে যুক্ত হবে
+}
+
+export interface RoutineTemplateItem {
+  id: string;
+  dayAge: number;
+  medicineName: string;
+  symptoms: string;
+  timingAndDosage: string;
+  medicineType?: MedicineScheduleItem['medicineType'];
+  timeOfDay?: string;
+  notes?: string;
+}
+
+export interface RoutineTemplateMaster {
+  id: string;
+  userId: string;
+  items: RoutineTemplateItem[];
+  updatedAt: string;
+}
+
+export interface DiseaseOutbreakRecord {
+  id: string;
+  batchId: string;
+  userId: string;
+  date: string; // YYYY-MM-DD
+  dayAge: number;
+  diseaseName: string;
+  symptoms: string;
+  emergencyMedicines: string;
+  dosageAndTiming: string;
+  durationDays: number;
+  affectedBirds?: number;
+  status: 'ongoing' | 'recovered';
+  recoveredDate?: string;
+  notes?: string;
+  createdAt: string;
 }
 
 export interface DuePaymentEntry {

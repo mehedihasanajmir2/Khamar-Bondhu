@@ -28,11 +28,16 @@ service cloud.firestore {
       allow create, update: if isOwner(userId) || isAdmin();
       allow delete: if isAdmin();
 
+      // Account-level Routine Medication Templates
+      match /routineTemplates/{templateId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
       // Batches Subcollection
       match /batches/{batchId} {
         allow read, write: if isOwner(userId) || isAdmin();
 
-        // Subcollections: growth, medicines, expenses, sales
+        // Subcollections: growth, medicines, diseaseLogs, expenses, sales
         match /{subcollection}/{docId} {
           allow read, write: if isOwner(userId) || isAdmin();
         }

@@ -1,10 +1,13 @@
 import {
   Batch,
   BatchSummary,
+  DiseaseOutbreakRecord,
   DuePaymentEntry,
   ExpenseRecord,
   GrowthRecord,
   MedicineScheduleItem,
+  RoutineTemplateItem,
+  RoutineTemplateMaster,
   SaleRecord,
   UserProfile,
 } from '../types';
@@ -112,6 +115,19 @@ export class PoultryStorageService {
         console.warn('Sync profile error:', e);
       }
 
+      // Sync account-level routine medication template if exists in Firestore
+      try {
+        const tmplDoc = await getDoc(doc(db, 'users', userId, 'routineTemplates', 'master'));
+        if (tmplDoc.exists()) {
+          const master = tmplDoc.data() as RoutineTemplateMaster;
+          if (Array.isArray(master.items) && master.items.length > 0) {
+            localStorage.setItem(this.getKey('routine_template', userId), JSON.stringify(master.items));
+          }
+        }
+      } catch (e) {
+        console.warn('Sync routine template error:', e);
+      }
+
       const batchesRef = collection(db, 'users', userId, 'batches');
       const batchSnaps = await getDocs(batchesRef);
       const localBatches = this.getBatches(userId);
@@ -124,6 +140,8 @@ export class PoultryStorageService {
           for (const rec of g) await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/growth/${rec.id}`, rec);
           const m = this.getMedicineSchedule(userId, b.id);
           for (const med of m) await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/medicines/${med.id}`, med);
+          const dl = this.getDiseaseLogs(userId, b.id);
+          for (const d of dl) await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/diseaseLogs/${d.id}`, d);
           const exp = this.getExpenses(userId, b.id);
           for (const e of exp) await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/expenses/${e.id}`, e);
           const s = this.getSales(userId, b.id);
@@ -182,7 +200,18 @@ export class PoultryStorageService {
                   localStorage.setItem(this.getKey(`sales_${batchId}`, userId), JSON.stringify(saleList));
                 }
               })
-              .catch((e) => console.warn('Sync sales error:', e))
+              .catch((e) => console.warn('Sync sales error:', e)),
+
+            // Sync disease outbreak logs in parallel
+            getDocs(collection(db, 'users', userId, 'batches', batchId, 'diseaseLogs'))
+              .then((dSnaps) => {
+                const dList: DiseaseOutbreakRecord[] = [];
+                dSnaps.forEach((d) => dList.push(d.data() as DiseaseOutbreakRecord));
+                if (dList.length > 0) {
+                  localStorage.setItem(this.getKey(`disease_logs_${batchId}`, userId), JSON.stringify(dList));
+                }
+              })
+              .catch((e) => console.warn('Sync diseaseLogs error:', e))
           ]);
         })
       );
@@ -234,6 +263,19 @@ export class PoultryStorageService {
         for (const s of sales) {
           await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/sales/${s.id}`, s);
         }
+        const diseaseLogs = this.getDiseaseLogs(userId, b.id);
+        for (const dl of diseaseLogs) {
+          await this.syncFirestoreDoc(`users/${userId}/batches/${b.id}/diseaseLogs/${dl.id}`, dl);
+        }
+      }
+      const tmpl = this.getRoutineTemplate(userId);
+      if (tmpl.length > 0) {
+        await this.syncFirestoreDoc(`users/${userId}/routineTemplates/master`, {
+          id: 'master',
+          userId,
+          items: tmpl,
+          updatedAt: new Date().toISOString()
+        });
       }
       return true;
     } catch (e) {
@@ -248,10 +290,12 @@ export class PoultryStorageService {
   static exportFullBackup(userId: string): string {
     const user = this.getUserById(userId);
     const batches = this.getBatches(userId);
+    const routineTemplate = this.getRoutineTemplate(userId);
     const data: Record<string, any> = {
-      version: '2.0',
+      version: '2.1',
       exportDate: new Date().toISOString(),
       user,
+      routineTemplate,
       batches,
       records: {}
     };
@@ -259,6 +303,7 @@ export class PoultryStorageService {
       data.records[b.id] = {
         growth: this.getGrowthRecords(userId, b.id),
         medicines: this.getMedicineSchedule(userId, b.id),
+        diseaseLogs: this.getDiseaseLogs(userId, b.id),
         expenses: this.getExpenses(userId, b.id),
         sales: this.getSales(userId, b.id),
       };
@@ -552,17 +597,17 @@ export class PoultryStorageService {
     return found || null;
   }
 
-  static saveBatch(userId: string, batch: Batch): void {
+  static saveBatch(userId: string, batch: Batch, options?: { routineSource?: string }): void {
     assertOwnership(userId, batch.userId);
     const batches = this.getBatches(userId);
     const idx = batches.findIndex((b) => b.id === batch.id);
     if (idx >= 0) {
       batches[idx] = batch;
     } else {
+      // Build initial medicine schedule BEFORE unshifting the new batch so previous batches can be inspected
+      const initialMeds = this.buildRoutineScheduleForNewBatch(userId, batch.id, options?.routineSource);
       batches.unshift(batch);
-      // Auto generate standard medicine schedule for new batch!
-      const initialMeds = generateInitialSchedule(batch.id, userId);
-      this.saveMedicineSchedule(userId, batch.id, initialMeds);
+      this.saveMedicineSchedule(userId, batch.id, initialMeds, { skipTemplateSync: true });
     }
     const key = this.getKey('poultry_batches', userId);
     localStorage.setItem(key, JSON.stringify(batches));
@@ -583,6 +628,7 @@ export class PoultryStorageService {
     // Cleanup related records
     localStorage.removeItem(this.getKey(`growth_${batchId}`, userId));
     localStorage.removeItem(this.getKey(`meds_${batchId}`, userId));
+    localStorage.removeItem(this.getKey(`disease_logs_${batchId}`, userId));
     localStorage.removeItem(this.getKey(`expenses_${batchId}`, userId));
     localStorage.removeItem(this.getKey(`sales_${batchId}`, userId));
 
@@ -671,14 +717,172 @@ export class PoultryStorageService {
     this.deleteFirestoreDoc(`users/${userId}/batches/${batchId}/growth/${recordId}`);
   }
 
+  // --- Account Routine Medication Template & Batch-to-Batch Propagation ---
+  static getRoutineTemplate(userId: string): RoutineTemplateItem[] {
+    if (!userId) return [];
+    const key = this.getKey('routine_template', userId);
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // ignore parse failure
+      }
+    }
+    return [];
+  }
+
+  static saveRoutineTemplate(userId: string, items: RoutineTemplateItem[]): void {
+    if (!userId) return;
+    const sorted = [...items].sort((a, b) => a.dayAge - b.dayAge);
+    const key = this.getKey('routine_template', userId);
+    localStorage.setItem(key, JSON.stringify(sorted));
+
+    const master: RoutineTemplateMaster = {
+      id: 'master',
+      userId,
+      items: sorted,
+      updatedAt: new Date().toISOString()
+    };
+    this.syncFirestoreDoc(`users/${userId}/routineTemplates/master`, master);
+  }
+
+  static syncBatchMedicinesToTemplate(userId: string, medicines: MedicineScheduleItem[]): RoutineTemplateItem[] {
+    if (!userId) return [];
+    // Keep all items where isRoutineTemplate is not explicitly false
+    const routineMeds = medicines.filter((m) => m.isRoutineTemplate !== false);
+    if (routineMeds.length === 0) return [];
+
+    // Deduplicate by (dayAge, medicineName, timeOfDay)
+    const seen = new Set<string>();
+    const templateItems: RoutineTemplateItem[] = [];
+    routineMeds.forEach((m, idx) => {
+      const sig = `${m.dayAge}__${m.medicineName.trim().toLowerCase()}__${(m.timeOfDay || '').trim().toLowerCase()}`;
+      if (!seen.has(sig)) {
+        seen.add(sig);
+        templateItems.push({
+          id: `tmpl_${m.dayAge}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+          dayAge: m.dayAge,
+          medicineName: m.medicineName,
+          symptoms: m.symptoms || m.purpose || 'সাধারণ স্বাস্থ্য ও রোগ প্রতিরোধ',
+          timingAndDosage: m.timingAndDosage || m.dosage || 'নিয়ম অনুযায়ী পানির সাথে',
+          medicineType: m.medicineType || 'অন্যান্য ওষুধ',
+          timeOfDay: m.timeOfDay || 'সকাল ও রাতে',
+          notes: m.notes || ''
+        });
+      }
+    });
+
+    this.saveRoutineTemplate(userId, templateItems);
+    return templateItems;
+  }
+
+  static buildRoutineScheduleForNewBatch(
+    userId: string,
+    newBatchId: string,
+    routineSource?: string
+  ): MedicineScheduleItem[] {
+    const mapTemplateToBatch = (items: Array<RoutineTemplateItem | MedicineScheduleItem>): MedicineScheduleItem[] =>
+      items
+        .filter((i) => ('isRoutineTemplate' in i ? i.isRoutineTemplate !== false : true))
+        .map((i, idx) => ({
+          id: `med_inherit_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+          batchId: newBatchId,
+          userId,
+          dayAge: i.dayAge,
+          medicineName: i.medicineName,
+          symptoms: i.symptoms || 'সাধারণ স্বাস্থ্য ও রোগ প্রতিরোধ',
+          timingAndDosage: i.timingAndDosage || 'নিয়ম অনুযায়ী পানির সাথে',
+          purpose: i.symptoms,
+          dosage: i.timingAndDosage,
+          medicineType: i.medicineType || 'অন্যান্য ওষুধ',
+          timeOfDay: i.timeOfDay || 'সকাল ও রাতে',
+          status: 'pending' as const,
+          notes: i.notes || '',
+          isCustom: true,
+          isRoutineTemplate: true
+        }))
+        .sort((a, b) => a.dayAge - b.dayAge);
+
+    if (routineSource === '__default__') {
+      return generateInitialSchedule(newBatchId, userId).map((m) => ({ ...m, isRoutineTemplate: true }));
+    }
+
+    if (routineSource && routineSource !== '__auto__' && routineSource !== '__template__') {
+      const sourceRaw = localStorage.getItem(this.getKey(`meds_${routineSource}`, userId));
+      if (sourceRaw) {
+        try {
+          const sourceMeds: MedicineScheduleItem[] = JSON.parse(sourceRaw);
+          if (sourceMeds.length > 0) {
+            return mapTemplateToBatch(sourceMeds);
+          }
+        } catch {
+          // fallback below
+        }
+      }
+    }
+
+    // 1. Check saved account-level routine template first
+    const savedTemplate = this.getRoutineTemplate(userId);
+    if (savedTemplate.length > 0) {
+      return mapTemplateToBatch(savedTemplate);
+    }
+
+    // 2. Otherwise check the user's most recent existing batch
+    const existingBatches = this.getBatches(userId);
+    for (const prevBatch of existingBatches) {
+      if (prevBatch.id === newBatchId) continue;
+      const prevRaw = localStorage.getItem(this.getKey(`meds_${prevBatch.id}`, userId));
+      if (prevRaw) {
+        try {
+          const prevMeds: MedicineScheduleItem[] = JSON.parse(prevRaw);
+          if (prevMeds.length > 0) {
+            return mapTemplateToBatch(prevMeds);
+          }
+        } catch {
+          // continue checking older batches
+        }
+      }
+    }
+
+    // 3. Fallback to standard broiler template
+    return generateInitialSchedule(newBatchId, userId).map((m) => ({ ...m, isRoutineTemplate: true }));
+  }
+
+  static importRoutineFromBatch(
+    userId: string,
+    targetBatchId: string,
+    sourceBatchIdOrTemplate: string,
+    mode: 'replace' | 'merge' = 'replace'
+  ): MedicineScheduleItem[] {
+    const imported = this.buildRoutineScheduleForNewBatch(userId, targetBatchId, sourceBatchIdOrTemplate);
+    if (mode === 'replace') {
+      this.saveMedicineSchedule(userId, targetBatchId, imported, { skipTemplateSync: true });
+      return imported;
+    }
+    const existing = this.getMedicineSchedule(userId, targetBatchId);
+    const existingSigs = new Set(
+      existing.map((m) => `${m.dayAge}__${m.medicineName.trim().toLowerCase()}__${(m.timeOfDay || '').trim().toLowerCase()}`)
+    );
+    const merged = [
+      ...existing,
+      ...imported.filter(
+        (m) => !existingSigs.has(`${m.dayAge}__${m.medicineName.trim().toLowerCase()}__${(m.timeOfDay || '').trim().toLowerCase()}`)
+      )
+    ].sort((a, b) => a.dayAge - b.dayAge);
+    this.saveMedicineSchedule(userId, targetBatchId, merged, { skipTemplateSync: true });
+    return merged;
+  }
+
   // --- Medicine & Vaccination Schedule ---
   static getMedicineSchedule(userId: string, batchId: string): MedicineScheduleItem[] {
     if (!userId || !batchId) return [];
     const key = this.getKey(`meds_${batchId}`, userId);
     const raw = localStorage.getItem(key);
     if (!raw) {
-      const initial = generateInitialSchedule(batchId, userId);
-      this.saveMedicineSchedule(userId, batchId, initial);
+      const initial = this.buildRoutineScheduleForNewBatch(userId, batchId);
+      this.saveMedicineSchedule(userId, batchId, initial, { skipTemplateSync: true });
       return initial;
     }
     try {
@@ -688,7 +892,8 @@ export class PoultryStorageService {
         .map((item) => ({
           ...item,
           symptoms: item.symptoms || item.purpose || 'সাধারণ স্বাস্থ্য ও রোগ প্রতিরোধ',
-          timingAndDosage: item.timingAndDosage || item.dosage || 'নিয়ম অনুযায়ী পানির সাথে'
+          timingAndDosage: item.timingAndDosage || item.dosage || 'নিয়ম অনুযায়ী পানির সাথে',
+          isRoutineTemplate: item.isRoutineTemplate !== false
         }))
         .sort((a, b) => a.dayAge - b.dayAge);
     } catch {
@@ -696,7 +901,12 @@ export class PoultryStorageService {
     }
   }
 
-  static saveMedicineSchedule(userId: string, batchId: string, items: MedicineScheduleItem[]): void {
+  static saveMedicineSchedule(
+    userId: string,
+    batchId: string,
+    items: MedicineScheduleItem[],
+    options?: { skipTemplateSync?: boolean }
+  ): void {
     items.forEach((i) => assertOwnership(userId, i.userId));
     const key = this.getKey(`meds_${batchId}`, userId);
     localStorage.setItem(key, JSON.stringify(items));
@@ -705,6 +915,10 @@ export class PoultryStorageService {
     items.forEach((item) => {
       this.syncFirestoreDoc(`users/${userId}/batches/${batchId}/medicines/${item.id}`, item);
     });
+
+    if (!options?.skipTemplateSync && items.length > 0) {
+      this.syncBatchMedicinesToTemplate(userId, items);
+    }
   }
 
   static toggleMedicineStatus(userId: string, batchId: string, itemId: string): MedicineScheduleItem[] {
@@ -721,7 +935,31 @@ export class PoultryStorageService {
       }
       return item;
     });
-    this.saveMedicineSchedule(userId, batchId, updated);
+    this.saveMedicineSchedule(userId, batchId, updated, { skipTemplateSync: true });
+    return updated;
+  }
+
+  static setSlotMedicinesStatus(
+    userId: string,
+    batchId: string,
+    itemIds: string[],
+    targetStatus: 'completed' | 'pending'
+  ): MedicineScheduleItem[] {
+    const idSet = new Set(itemIds);
+    const items = this.getMedicineSchedule(userId, batchId);
+    const nowIso = new Date().toISOString();
+    const updated = items.map((item) => {
+      if (idSet.has(item.id)) {
+        assertOwnership(userId, item.userId);
+        return {
+          ...item,
+          status: targetStatus,
+          completedAt: targetStatus === 'completed' ? nowIso : undefined
+        };
+      }
+      return item;
+    });
+    this.saveMedicineSchedule(userId, batchId, updated, { skipTemplateSync: true });
     return updated;
   }
 
@@ -741,6 +979,44 @@ export class PoultryStorageService {
     items.push(...itemsToAdd);
     items.sort((a, b) => a.dayAge - b.dayAge);
     this.saveMedicineSchedule(userId, batchId, items);
+  }
+
+  static copyMedicinesToDays(
+    userId: string,
+    batchId: string,
+    sourceItems: MedicineScheduleItem[],
+    targetDays: number[]
+  ): MedicineScheduleItem[] {
+    if (sourceItems.length === 0 || targetDays.length === 0) {
+      return this.getMedicineSchedule(userId, batchId);
+    }
+    const existing = this.getMedicineSchedule(userId, batchId);
+    const newItems: MedicineScheduleItem[] = [];
+    const uniqueTargetDays = Array.from(new Set(targetDays.filter((d) => d >= 1 && d <= 365))).sort((a, b) => a - b);
+
+    uniqueTargetDays.forEach((day) => {
+      sourceItems.forEach((src, idx) => {
+        assertOwnership(userId, src.userId);
+        newItems.push({
+          ...src,
+          id: `med_copy_${Date.now()}_${day}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+          batchId,
+          userId,
+          dayAge: day,
+          courseId: undefined,
+          courseDayIndex: undefined,
+          totalCourseDays: undefined,
+          status: 'pending',
+          completedAt: undefined,
+          isCustom: true,
+          isRoutineTemplate: src.isRoutineTemplate !== false
+        });
+      });
+    });
+
+    const merged = [...existing, ...newItems].sort((a, b) => a.dayAge - b.dayAge);
+    this.saveMedicineSchedule(userId, batchId, merged);
+    return merged;
   }
 
   static updateMedicineItem(userId: string, item: MedicineScheduleItem): void {
@@ -764,13 +1040,87 @@ export class PoultryStorageService {
   }
 
   static clearAllMedicines(userId: string, batchId: string): void {
-    this.saveMedicineSchedule(userId, batchId, []);
+    const existing = this.getMedicineSchedule(userId, batchId);
+    existing.forEach((item) => {
+      this.deleteFirestoreDoc(`users/${userId}/batches/${batchId}/medicines/${item.id}`);
+    });
+    this.saveMedicineSchedule(userId, batchId, [], { skipTemplateSync: true });
   }
 
   static resetMedicineSchedule(userId: string, batchId: string): MedicineScheduleItem[] {
-    const initial = generateInitialSchedule(batchId, userId);
-    this.saveMedicineSchedule(userId, batchId, initial);
+    const initial = generateInitialSchedule(batchId, userId).map((m) => ({ ...m, isRoutineTemplate: true }));
+    this.saveMedicineSchedule(userId, batchId, initial, { skipTemplateSync: true });
     return initial;
+  }
+
+  // --- Disease Outbreak & Emergency Treatment Log (জরুরি রোগ ও হঠাৎ চিকিৎসা) ---
+  static getDiseaseLogs(userId: string, batchId: string): DiseaseOutbreakRecord[] {
+    if (!userId || !batchId) return [];
+    const key = this.getKey(`disease_logs_${batchId}`, userId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    try {
+      const items: DiseaseOutbreakRecord[] = JSON.parse(raw);
+      return items
+        .filter((d) => d.userId === userId && d.batchId === batchId)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.dayAge - a.dayAge);
+    } catch {
+      return [];
+    }
+  }
+
+  static saveDiseaseLog(userId: string, log: DiseaseOutbreakRecord): void {
+    assertOwnership(userId, log.userId);
+    const items = this.getDiseaseLogs(userId, log.batchId);
+    const idx = items.findIndex((d) => d.id === log.id);
+    if (idx >= 0) {
+      items[idx] = log;
+    } else {
+      items.unshift(log);
+    }
+    const key = this.getKey(`disease_logs_${log.batchId}`, userId);
+    localStorage.setItem(key, JSON.stringify(items));
+
+    // Cloud Firestore Sync
+    this.syncFirestoreDoc(`users/${userId}/batches/${log.batchId}/diseaseLogs/${log.id}`, log);
+  }
+
+  static toggleDiseaseStatus(userId: string, batchId: string, logId: string): DiseaseOutbreakRecord[] {
+    const items = this.getDiseaseLogs(userId, batchId);
+    const updated = items.map((d) => {
+      if (d.id === logId) {
+        assertOwnership(userId, d.userId);
+        const nextStatus: 'ongoing' | 'recovered' = d.status === 'recovered' ? 'ongoing' : 'recovered';
+        return {
+          ...d,
+          status: nextStatus,
+          recoveredDate: nextStatus === 'recovered' ? new Date().toISOString().split('T')[0] : undefined
+        };
+      }
+      return d;
+    });
+    const key = this.getKey(`disease_logs_${batchId}`, userId);
+    localStorage.setItem(key, JSON.stringify(updated));
+
+    const changed = updated.find((d) => d.id === logId);
+    if (changed) {
+      this.syncFirestoreDoc(`users/${userId}/batches/${batchId}/diseaseLogs/${changed.id}`, changed);
+    }
+    return updated;
+  }
+
+  static deleteDiseaseLog(userId: string, batchId: string, logId: string): void {
+    const items = this.getDiseaseLogs(userId, batchId);
+    const target = items.find((d) => d.id === logId);
+    if (target) {
+      assertOwnership(userId, target.userId);
+    }
+    const filtered = items.filter((d) => d.id !== logId);
+    const key = this.getKey(`disease_logs_${batchId}`, userId);
+    localStorage.setItem(key, JSON.stringify(filtered));
+
+    // Cloud Firestore Delete
+    this.deleteFirestoreDoc(`users/${userId}/batches/${batchId}/diseaseLogs/${logId}`);
   }
 
   // --- Expense Log (খরচ হিসাব) ---
