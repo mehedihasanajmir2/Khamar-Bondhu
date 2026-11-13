@@ -38,6 +38,60 @@ const CATEGORIES: ExpenseCategory[] = [
   'অন্যান্য'
 ];
 
+const PURCHASE_CATEGORIES: ExpenseCategory[] = [
+  'বাচ্চা ক্রয়',
+  'ফিড/খাবার',
+  'ওষুধ ও টিকা',
+  'বিদ্যুৎ/জ্বালানি',
+  'পরিবহন',
+  'তুষ ও লিটার',
+  'শ্রমিক ও মজুরি',
+  'অন্যান্য'
+];
+
+const CATEGORY_STYLE_MAP: Record<string, { bar: string; dot: string; badge: string }> = {
+  'বাচ্চা ক্রয়': {
+    bar: 'bg-amber-500',
+    dot: 'bg-amber-500',
+    badge: 'bg-amber-50 text-amber-800 border-amber-200'
+  },
+  'ফিড/খাবার': {
+    bar: 'bg-emerald-500',
+    dot: 'bg-emerald-500',
+    badge: 'bg-emerald-50 text-emerald-800 border-emerald-200'
+  },
+  'ওষুধ ও টিকা': {
+    bar: 'bg-sky-500',
+    dot: 'bg-sky-500',
+    badge: 'bg-sky-50 text-sky-800 border-sky-200'
+  },
+  'বিদ্যুৎ/জ্বালানি': {
+    bar: 'bg-orange-500',
+    dot: 'bg-orange-500',
+    badge: 'bg-orange-50 text-orange-800 border-orange-200'
+  },
+  'পরিবহন': {
+    bar: 'bg-indigo-500',
+    dot: 'bg-indigo-500',
+    badge: 'bg-indigo-50 text-indigo-800 border-indigo-200'
+  },
+  'তুষ ও লিটার': {
+    bar: 'bg-teal-500',
+    dot: 'bg-teal-500',
+    badge: 'bg-teal-50 text-teal-800 border-teal-200'
+  },
+  'শ্রমিক ও মজুরি': {
+    bar: 'bg-purple-500',
+    dot: 'bg-purple-500',
+    badge: 'bg-purple-50 text-purple-800 border-purple-200'
+  },
+  'অন্যান্য': {
+    bar: 'bg-slate-500',
+    dot: 'bg-slate-500',
+    badge: 'bg-slate-100 text-slate-700 border-slate-200'
+  }
+};
+
 interface ExpenseLogProps {
   activeBatch: Batch | null;
   expenses: ExpenseRecord[];
@@ -67,6 +121,7 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'due_only' | 'cash_only' | 'cleared' | 'repaid_entries'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCategoryPanelOpen, setIsCategoryPanelOpen] = useState(true);
 
   // Add Expense / Repay Form State
   const [date, setDate] = useState(getTodayDateString());
@@ -136,6 +191,28 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
   const totalDueRepaid = totalDirectRepayments + unrecordedRepaid;
   const currentRemainingDue = Math.max(0, totalDueTaken - totalDueRepaid);
   const totalActualCashPaid = totalInitialCash + totalDueRepaid;
+
+  // Category-wise breakdown (separated totals for each expense category)
+  const categoryBreakdown = PURCHASE_CATEGORIES.map((cat) => {
+    const items = purchaseExpenses.filter((e) => e.category === cat);
+    const total = items.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const remainingDue = items.reduce((sum, e) => {
+      const initDue = e.paymentMethod === 'বাকি'
+        ? (e.dueAmount !== undefined ? e.dueAmount : e.amount)
+        : e.paymentMethod === 'আংশিক নগদ ও বাকি'
+        ? (e.dueAmount !== undefined ? e.dueAmount : Math.max(0, e.amount - (e.paidAmount || 0)))
+        : (e.dueAmount || 0);
+      return sum + Math.max(0, initDue - (e.repaidAmount || 0));
+    }, 0);
+    const percent = totalGrossExpense > 0 ? Math.round((total / totalGrossExpense) * 100) : 0;
+    return {
+      category: cat,
+      total,
+      count: items.length,
+      remainingDue,
+      percent
+    };
+  }).sort((a, b) => b.total - a.total);
 
   // Find all active pending due vouchers for target dropdown
   const pendingDueExpenses = purchaseExpenses.filter((e) => {
@@ -520,27 +597,41 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
         </div>
       </div>
 
-      {/* Expense Entries Table with Due Tracking & Payment Action */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="font-bold text-slate-900 text-base">খরচের বিস্তারিত ভাউচার ও বাকি খাতা</h3>
-            <p className="text-xs text-slate-400">প্রতিটি ভাউচারের নগদ, মূল বাকি, জমা ও অবশিষ্ট দেনা বিবরণ</p>
+      {/* Main Split Layout: Expense Ledger + Side Category Breakdown Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Expense Entries Table with Due Tracking & Payment Action */}
+        <div className="lg:col-span-8 min-w-0 bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-slate-900 text-base">খরচের বিস্তারিত ভাউচার ও বাকি খাতা</h3>
+                {selectedCategory !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory('all')}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200 hover:bg-rose-200 transition-colors"
+                  >
+                    <span>খাত: {selectedCategory}</span>
+                    <span className="font-black">✕</span>
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-400">প্রতিটি ভাউচারের নগদ, মূল বাকি, জমা ও অবশিষ্ট দেনা বিবরণ</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                মোট খরচ: {formatTaka(purchaseExpenses.reduce((s, e) => s + e.amount, 0))}
+              </span>
+              <span className={`text-xs sm:text-sm font-black px-3.5 py-1.5 rounded-xl border flex items-center gap-1.5 ${
+                currentRemainingDue > 0
+                  ? 'bg-rose-100 text-rose-800 border-rose-300 ring-2 ring-rose-400/30'
+                  : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+              }`}>
+                <AlertCircle className="w-4 h-4 text-rose-600" />
+                এখন মোট বাকি আছে: {formatTaka(currentRemainingDue)}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-              মোট খরচ: {formatTaka(purchaseExpenses.reduce((s, e) => s + e.amount, 0))}
-            </span>
-            <span className={`text-xs sm:text-sm font-black px-3.5 py-1.5 rounded-xl border flex items-center gap-1.5 ${
-              currentRemainingDue > 0
-                ? 'bg-rose-100 text-rose-800 border-rose-300 ring-2 ring-rose-400/30'
-                : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-            }`}>
-              <AlertCircle className="w-4 h-4 text-rose-600" />
-              এখন মোট বাকি আছে: {formatTaka(currentRemainingDue)}
-            </span>
-          </div>
-        </div>
 
         {filteredExpenses.length === 0 ? (
           <div className="py-12 text-center text-slate-400 text-xs">
@@ -745,6 +836,150 @@ export const ExpenseLog: React.FC<ExpenseLogProps> = ({
             })}
           </div>
         )}
+        </div>
+
+        {/* Right Side Panel: খাত/ক্যাটাগরি অনুযায়ী আলাদা খরচের হিসাব */}
+        <aside className="order-first lg:order-last lg:col-span-4 min-w-0 lg:sticky lg:top-20 bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-2 bg-gradient-to-r from-slate-50 to-rose-50/50">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                <PieChart className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-black text-slate-900 text-sm truncate">
+                  কিসে কত খরচ (খাত অনুযায়ী)
+                </h3>
+                <p className="text-[11px] text-slate-500 truncate">
+                  ক্যাটাগরিতে ক্লিক করলে পাশের তালিকা ফিল্টার হবে
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {selectedCategory !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('all')}
+                  className="px-2 py-1 rounded-lg bg-slate-900 text-white text-[10px] font-bold hover:bg-slate-700 transition-colors"
+                >
+                  সব খাত
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsCategoryPanelOpen(!isCategoryPanelOpen)}
+                className="lg:hidden p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                aria-label="খাত অনুযায়ী হিসাব দেখুন বা লুকান"
+              >
+                {isCategoryPanelOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className={`${isCategoryPanelOpen ? 'block' : 'hidden lg:block'} p-3.5 space-y-2.5`}>
+            {/* Grand Total Row */}
+            <div className="p-3 rounded-2xl bg-slate-900 text-white flex items-center justify-between gap-2">
+              <div>
+                <span className="text-[10px] text-slate-300 font-semibold block">সব খাত মিলিয়ে মোট খরচ</span>
+                <span className="text-base font-black">{formatTaka(totalGrossExpense)}</span>
+              </div>
+              <span className="text-[11px] font-bold bg-white/15 px-2.5 py-1 rounded-lg">
+                {toBnNumber(purchaseExpenses.length)} টি ভাউচার
+              </span>
+            </div>
+
+            {/* Category Cards */}
+            <div className="space-y-2">
+              {categoryBreakdown.map((item) => {
+                const styles = CATEGORY_STYLE_MAP[item.category] || CATEGORY_STYLE_MAP['অন্যান্য'];
+                const isSelected = selectedCategory === item.category;
+
+                return (
+                  <button
+                    key={item.category}
+                    type="button"
+                    onClick={() =>
+                      setSelectedCategory(isSelected ? 'all' : item.category)
+                    }
+                    className={`w-full text-left p-2.5 rounded-2xl border transition-all ${
+                      isSelected
+                        ? 'border-rose-400 bg-rose-50/70 ring-2 ring-rose-200'
+                        : item.total > 0
+                        ? 'border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300'
+                        : 'border-slate-100 bg-white opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${styles.dot}`} />
+                        <span className="text-xs font-bold text-slate-800 truncate">
+                          {item.category}
+                        </span>
+                        {item.count > 0 && (
+                          <span className="text-[10px] font-semibold text-slate-500 shrink-0">
+                            ({toBnNumber(item.count)})
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-black text-slate-900">
+                          {formatTaka(item.total)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Visual Share Bar & Info */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${styles.bar}`}
+                          style={{ width: `${item.total > 0 ? Math.max(4, item.percent) : 0}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 w-9 text-right shrink-0">
+                        {toBnNumber(item.percent)}%
+                      </span>
+                    </div>
+
+                    {item.remainingDue > 0 && (
+                      <div className="mt-1.5 flex items-center justify-between text-[10px] font-bold text-rose-700">
+                        <span>এই খাতে বাকি:</span>
+                        <span>{formatTaka(item.remainingDue)}</span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Separate Repayment Summary Line (if any standalone/repaid entries exist) */}
+            {totalDueRepaid > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedCategory(
+                    selectedCategory === 'বাকি জমা / পরিশোধ' ? 'all' : 'বাকি জমা / পরিশোধ'
+                  )
+                }
+                className={`w-full text-left p-2.5 rounded-2xl border transition-all flex items-center justify-between gap-2 ${
+                  selectedCategory === 'বাকি জমা / পরিশোধ'
+                    ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-200'
+                    : 'border-teal-200 bg-teal-50/50 hover:bg-teal-50'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                  <span className="text-xs font-bold text-teal-900 truncate">
+                    বাকি জমা / পরিশোধ
+                  </span>
+                </div>
+                <span className="text-xs font-black text-teal-700 shrink-0">
+                  {formatTaka(totalDueRepaid)}
+                </span>
+              </button>
+            )}
+          </div>
+        </aside>
       </div>
 
       {/* Modal 1: Add New Expense OR Add Due Repayment (জমা) */}
