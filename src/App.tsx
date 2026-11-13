@@ -594,7 +594,7 @@ const MainApp: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen w-full overflow-x-clip bg-slate-50 flex flex-col font-['Hind_Siliguri',sans-serif]">
+    <div className="min-h-screen w-full overflow-x-clip bg-slate-50 flex flex-col font-['Noto_Sans_Bengali','Inter',sans-serif]">
       {/* Toast Notification */}
       {notification && (
         <div className="fixed top-20 right-4 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 animate-bounce">
